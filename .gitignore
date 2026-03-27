@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Build output
+target/
+*.class
+
+# IDE / tooling
+.idea/
+*.iml
+.vscode/
+
+# Claude / MCP local config (may contain secrets)
+.claude/
+.mcp.json
+
+# Logs
+*.log
