@@ -6,7 +6,7 @@ A comprehensive Burp Suite extension (BApp) specifically designed for API securi
 - Burp Suite Professional (Interactive mode with UI)
 - Burp Suite Enterprise Edition (Headless DAST mode)
 
-> **For Burp Enterprise users:** See [BURP_ENTERPRISE_GUIDE.md](BURP_ENTERPRISE_GUIDE.md) for detailed integration instructions.
+> **For Burp DAST users:** See [BURP_ENTERPRISE_GUIDE.md](BURP_ENTERPRISE_GUIDE.md) for detailed integration instructions.
 
 ## 🎯 Key Features
 
