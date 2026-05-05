@@ -2,12 +2,12 @@
 
 ## Prerequisites
 
-1. **Java Development Kit (JDK) 11 or higher**
+1. **Java Development Kit (JDK) 17 or higher** (required by the Montoya API)
    ```bash
    # Check Java version
    java -version
 
-   # Should output: java version "11.0.x" or higher
+   # Should output: java version "17.x.x" or higher
    ```
 
    If not installed, download from:
@@ -119,7 +119,7 @@ export PATH=/path/to/maven/bin:$PATH
 [ERROR] Source option 11 is no longer supported. Use 17 or later.
 ```
 
-**Solution:** Update Java to version 11 or higher.
+**Solution:** Update Java to version 17 or higher.
 
 ### Issue: Dependency Download Failures
 ```
@@ -158,7 +158,7 @@ export PATH=/path/to/maven/bin:$PATH
 2. Look for error messages
 
 **Common causes:**
-- **Wrong Java version:** Extension requires Java 11+
+- **Wrong Java version:** Extension requires Java 17+ (Montoya API requirement)
 - **Missing dependencies:** Rebuild with `mvn clean package`
 - **Corrupted JAR:** Delete and rebuild
 - **Burp version:** Requires Burp Suite Professional (not Community Edition)
