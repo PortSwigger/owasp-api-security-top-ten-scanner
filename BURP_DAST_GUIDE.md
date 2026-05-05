@@ -1,10 +1,10 @@
-# Burp Suite Enterprise Edition (DAST) Integration Guide
+# Burp Suite DAST (DAST) Integration Guide
 
 ## 🎯 Overview
 
 This extension is **fully compatible** with both:
 - ✅ **Burp Suite Professional** (Interactive scanning with UI)
-- ✅ **Burp Suite Enterprise Edition** (Automated/headless DAST scanning)
+- ✅ **Burp Suite DAST** (Automated/headless DAST scanning)
 
 The extension automatically detects the environment and adjusts accordingly.
 
@@ -19,12 +19,12 @@ The extension automatically detects the environment and adjusts accordingly.
 
 ---
 
-## 🚀 Installation in Burp Suite Enterprise Edition
+## 🚀 Installation in Burp Suite DAST
 
 ### Method 1: Via Web UI (Recommended)
 
-1. **Log in to Burp Suite Enterprise**
-   - Navigate to your Burp Enterprise web interface
+1. **Log in to Burp Suite DAST**
+   - Navigate to your Burp Suite DAST web interface
    - Go to **Settings** → **Extensions**
 
 2. **Upload Extension**
@@ -98,7 +98,7 @@ The extension automatically identifies API endpoints based on:
 
 ## 📊 Viewing Results
 
-### In Burp Enterprise Dashboard
+### In Burp Suite DAST Dashboard
 
 1. **Navigate to Scan Results**
    - Select your completed scan
@@ -154,7 +154,7 @@ permission to access the requested resource.
 For large APIs, consider:
 
 1. **Increase Thread Count**
-   - Enterprise settings → Performance
+   - DAST settings → Performance
    - Set higher thread count for faster scans
 
 2. **Adjust Timeouts**
@@ -215,7 +215,7 @@ The extension runs all checks by default, but you can analyze results by categor
 
 1. **Trigger Scans via API**
 ```bash
-curl -X POST https://enterprise.burp.example.com/api/v1/scans \
+curl -X POST https://dast.burp.example.com/api/v1/scans \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -228,13 +228,13 @@ curl -X POST https://enterprise.burp.example.com/api/v1/scans \
 
 2. **Monitor Scan Progress**
 ```bash
-curl https://enterprise.burp.example.com/api/v1/scans/{scan_id} \
+curl https://dast.burp.example.com/api/v1/scans/{scan_id} \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 3. **Retrieve Results**
 ```bash
-curl https://enterprise.burp.example.com/api/v1/scans/{scan_id}/issues \
+curl https://dast.burp.example.com/api/v1/scans/{scan_id}/issues \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -245,7 +245,7 @@ curl https://enterprise.burp.example.com/api/v1/scans/{scan_id}/issues \
 ### Extension Not Loading
 
 **Check Extension Logs:**
-1. Go to Burp Enterprise → Settings → Extensions
+1. Go to Burp Suite DAST → Settings → Extensions
 2. View extension details
 3. Check load status and error messages
 
@@ -254,10 +254,10 @@ curl https://enterprise.burp.example.com/api/v1/scans/{scan_id}/issues \
 ====================================
 Advanced API Security Scanner v1.0.0
 OWASP API Security Top 10 2023
-Compatible with Burp Suite Professional & Enterprise Edition
+Compatible with Burp Suite Professional & Burp Suite DAST
 ====================================
 Extension loaded successfully!
-Mode: Headless (Enterprise)
+Edition: Burp Suite DAST
 ```
 
 ### No Issues Detected
@@ -284,10 +284,10 @@ Mode: Headless (Enterprise)
 
 ## 📚 Additional Resources
 
-### Burp Enterprise Documentation
-- [Extension Management](https://portswigger.net/burp/documentation/enterprise/managing-extensions)
-- [Scan Configuration](https://portswigger.net/burp/documentation/enterprise/scans)
-- [API Reference](https://portswigger.net/burp/documentation/enterprise/api)
+### Burp Suite DAST Documentation
+- [Burp Suite DAST documentation hub](https://portswigger.net/burp/documentation/dast)
+- [DAST setup guides](https://portswigger.net/burp/documentation/dast/setup)
+- [Extension authoring](https://portswigger.net/burp/documentation/desktop/extend-burp/extensions/index.html)
 
 ### OWASP API Security
 - [OWASP API Security Top 10 2023](https://owasp.org/www-project-api-security/)
@@ -300,7 +300,7 @@ Mode: Headless (Enterprise)
 To update to a newer version:
 
 1. Build new JAR with latest code
-2. Upload to Burp Enterprise
+2. Upload to Burp Suite DAST
 3. Old version will be automatically replaced
 4. Restart active scans to use new version
 
@@ -346,7 +346,7 @@ To update to a newer version:
 
 For issues specific to:
 - **Extension:** Check GitHub issues
-- **Burp Enterprise:** Contact PortSwigger support
+- **Burp Suite DAST:** Contact PortSwigger support
 - **OWASP Standards:** Refer to OWASP documentation
 
 ---
@@ -355,7 +355,7 @@ For issues specific to:
 
 Before running production scans:
 
-- [ ] Extension loaded successfully in Burp Enterprise
+- [ ] Extension loaded successfully in Burp Suite DAST
 - [ ] Scan configuration includes Active + Passive checks
 - [ ] API endpoints are in scope
 - [ ] Authentication credentials configured (if required)
@@ -368,4 +368,4 @@ Before running production scans:
 
 **Version:** 1.0.0
 **Last Updated:** 2025-11-26
-**Compatibility:** Burp Suite Enterprise Edition 2023.x and later
+**Compatibility:** Burp Suite DAST 2023.x and later

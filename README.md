@@ -4,9 +4,9 @@ A comprehensive Burp Suite extension (BApp) specifically designed for API securi
 
 **✅ Compatible with:**
 - Burp Suite Professional (Interactive mode with UI)
-- Burp Suite Enterprise Edition (Headless DAST mode)
+- Burp Suite DAST (headless / automated scanning)
 
-> **For Burp DAST users:** See [BURP_ENTERPRISE_GUIDE.md](BURP_ENTERPRISE_GUIDE.md) for detailed integration instructions.
+> **For Burp Suite DAST users:** See [BURP_DAST_GUIDE.md](BURP_DAST_GUIDE.md) for detailed integration instructions.
 
 ## 🎯 Key Features
 

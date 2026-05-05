@@ -60,7 +60,11 @@ public final class BurpExtender implements BurpExtension {
         api.extension().setName(EXTENSION_NAME);
 
         BurpSuiteEdition edition = api.burpSuite().version().edition();
-        boolean isEnterprise = edition == BurpSuiteEdition.ENTERPRISE_EDITION;
+        // The DAST edition runs headless and ships no UI surface; skip the
+        // suite tab in that case. Naming follows the current product line —
+        // the Montoya enum constant is still ENTERPRISE_EDITION for backward
+        // compatibility.
+        boolean isDast = edition == BurpSuiteEdition.ENTERPRISE_EDITION;
 
         EndpointRegistry endpoints = new EndpointRegistry();
         AiClient aiClient = new AiClient(api);
@@ -69,7 +73,7 @@ public final class BurpExtender implements BurpExtension {
 
         registerScanChecks(api, endpoints, triage, fieldDiscovery);
 
-        ScannerTab tab = isEnterprise ? null : registerUiTab(api, endpoints);
+        ScannerTab tab = isDast ? null : registerUiTab(api, endpoints);
         registerUnloadingHandler(api, aiClient, endpoints, tab);
 
         logBanner(api, edition, aiClient.isAvailable());
@@ -151,7 +155,7 @@ public final class BurpExtender implements BurpExtension {
         api.logging().logToOutput("====================================");
         api.logging().logToOutput(EXTENSION_NAME + " v2.0.0");
         api.logging().logToOutput("OWASP API Security Top 10 (2023) coverage");
-        api.logging().logToOutput("Edition: " + edition);
+        api.logging().logToOutput("Edition: " + edition.displayName());
         api.logging().logToOutput("AI features: " + (aiAvailable ? "enabled" : "disabled"));
         api.logging().logToOutput("====================================");
     }
