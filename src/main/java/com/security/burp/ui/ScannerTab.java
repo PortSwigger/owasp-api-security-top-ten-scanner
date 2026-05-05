@@ -1,208 +1,104 @@
 package com.security.burp.ui;
 
-import burp.*;
-import com.security.burp.scanner.ApiScanner;
-import com.security.burp.utils.ApiEndpoint;
-import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import java.awt.*;
-import java.util.Map;
+import burp.api.montoya.ui.swing.SwingUtils;
+import com.security.burp.scanner.EndpointRegistry;
 
-public class ScannerTab implements ITab {
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.table.AbstractTableModel;
+import java.awt.BorderLayout;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 
-    private final IBurpExtenderCallbacks callbacks;
-    private final ApiScanner apiScanner;
-    private JPanel mainPanel;
-    private JTable endpointTable;
-    private DefaultTableModel tableModel;
-    private JTextArea statsArea;
-    private Timer refreshTimer;
+/**
+ * UI tab listing API endpoints discovered by the passive checks.
+ *
+ * <p>The table is backed by {@link EndpointRegistry} and refreshed by a
+ * Swing timer. The timer is stopped via {@link #dispose()} when the
+ * extension unloads, so this class leaks no resources.
+ *
+ * <p>Future popup dialogs from this tab should use
+ * {@link SwingUtils#suiteFrame()} as their parent to ensure they appear on
+ * the correct monitor in multi-display setups (BApp criterion #10).
+ */
+public final class ScannerTab {
 
-    public ScannerTab(IBurpExtenderCallbacks callbacks, ApiScanner apiScanner) {
-        this.callbacks = callbacks;
-        this.apiScanner = apiScanner;
-        initializeUI();
-        startAutoRefresh();
+    private static final int REFRESH_INTERVAL_MS = 5_000;
+
+    private final EndpointRegistry registry;
+    @SuppressWarnings("unused") // retained for future popups; see class javadoc.
+    private final SwingUtils swingUtils;
+    private final JPanel panel;
+    private final EndpointTableModel model;
+    private final JLabel statusLabel;
+    private final Timer refreshTimer;
+
+    public ScannerTab(EndpointRegistry registry, SwingUtils swingUtils) {
+        this.registry = registry;
+        this.swingUtils = swingUtils;
+        this.model = new EndpointTableModel();
+        this.statusLabel = new JLabel("0 endpoints discovered");
+        this.panel = buildPanel();
+        this.refreshTimer = new Timer(REFRESH_INTERVAL_MS, e -> refresh());
+        refreshTimer.start();
     }
 
-    private void initializeUI() {
-        mainPanel = new JPanel(new BorderLayout(10, 10));
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        // Header panel with title and stats
-        JPanel headerPanel = createHeaderPanel();
-        mainPanel.add(headerPanel, BorderLayout.NORTH);
-
-        // Center panel with endpoint table
-        JPanel centerPanel = createCenterPanel();
-        mainPanel.add(centerPanel, BorderLayout.CENTER);
-
-        // Bottom panel with controls
-        JPanel bottomPanel = createBottomPanel();
-        mainPanel.add(bottomPanel, BorderLayout.SOUTH);
-    }
-
-    private JPanel createHeaderPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-
-        // Title
-        JLabel titleLabel = new JLabel("Advanced API Security Scanner");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 18));
-        panel.add(titleLabel, BorderLayout.NORTH);
-
-        // Stats area
-        statsArea = new JTextArea(8, 50);
-        statsArea.setEditable(false);
-        statsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        statsArea.setBackground(new Color(245, 245, 245));
-        statsArea.setText("Waiting for API traffic...\n\n" +
-                         "Features:\n" +
-                         "  • HTTP Method Fuzzing (tests all methods on each endpoint)\n" +
-                         "  • OWASP API Security Top 10 checks\n" +
-                         "  • Broken Object Level Authorization (BOLA)\n" +
-                         "  • Mass Assignment detection\n" +
-                         "  • Injection vulnerabilities (SQL, NoSQL, Command, XSS)\n" +
-                         "  • SSRF detection\n" +
-                         "  • Security misconfiguration checks\n");
-        JScrollPane statsScroll = new JScrollPane(statsArea);
-        panel.add(statsScroll, BorderLayout.CENTER);
-
+    public java.awt.Component component() {
         return panel;
     }
 
-    private JPanel createCenterPanel() {
-        JPanel panel = new JPanel(new BorderLayout(5, 5));
-
-        JLabel tableLabel = new JLabel("Discovered API Endpoints:");
-        tableLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        panel.add(tableLabel, BorderLayout.NORTH);
-
-        // Create table
-        String[] columnNames = {"Host", "Path", "Methods", "Requests"};
-        tableModel = new DefaultTableModel(columnNames, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-
-        endpointTable = new JTable(tableModel);
-        endpointTable.setAutoCreateRowSorter(true);
-        endpointTable.getTableHeader().setReorderingAllowed(false);
-
-        // Set column widths
-        endpointTable.getColumnModel().getColumn(0).setPreferredWidth(150);
-        endpointTable.getColumnModel().getColumn(1).setPreferredWidth(300);
-        endpointTable.getColumnModel().getColumn(2).setPreferredWidth(200);
-        endpointTable.getColumnModel().getColumn(3).setPreferredWidth(80);
-
-        JScrollPane tableScroll = new JScrollPane(endpointTable);
-        panel.add(tableScroll, BorderLayout.CENTER);
-
-        return panel;
+    /** Stops the refresh timer. Called from the unloading handler. */
+    public void dispose() {
+        refreshTimer.stop();
     }
 
-    private JPanel createBottomPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+    private JPanel buildPanel() {
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(new JLabel("API endpoints discovered during scanning:"), BorderLayout.NORTH);
+        root.add(new JScrollPane(new JTable(model)), BorderLayout.CENTER);
+        root.add(statusLabel, BorderLayout.SOUTH);
+        return root;
+    }
 
-        // Refresh button
-        JButton refreshButton = new JButton("Refresh Endpoints");
-        refreshButton.addActionListener(e -> refreshEndpointTable());
-        panel.add(refreshButton);
-
-        // Clear button
-        JButton clearButton = new JButton("Clear Table");
-        clearButton.addActionListener(e -> {
-            tableModel.setRowCount(0);
-            updateStats();
+    private void refresh() {
+        SwingUtilities.invokeLater(() -> {
+            model.update(registry.snapshot());
+            statusLabel.setText(model.getRowCount() + " endpoints discovered");
         });
-        panel.add(clearButton);
-
-        // Auto-refresh checkbox
-        JCheckBox autoRefreshCheck = new JCheckBox("Auto-refresh (5s)", true);
-        autoRefreshCheck.addActionListener(e -> {
-            if (autoRefreshCheck.isSelected()) {
-                startAutoRefresh();
-            } else {
-                stopAutoRefresh();
-            }
-        });
-        panel.add(autoRefreshCheck);
-
-        // Status label
-        JLabel statusLabel = new JLabel("Active scan checks will appear in Burp's Issues tab");
-        statusLabel.setForeground(Color.BLUE);
-        panel.add(Box.createHorizontalStrut(20));
-        panel.add(statusLabel);
-
-        return panel;
     }
 
-    private void refreshEndpointTable() {
-        Map<String, ApiEndpoint> endpoints = apiScanner.getDiscoveredEndpoints();
+    /** Read-only view of {@link EndpointRegistry} sorted by host then path. */
+    private static final class EndpointTableModel extends AbstractTableModel {
+        private static final String[] COLUMNS = {"Host", "Path", "Methods"};
+        private List<EndpointRegistry.ApiEndpoint> rows = List.of();
 
-        tableModel.setRowCount(0);
+        void update(Collection<EndpointRegistry.ApiEndpoint> snapshot) {
+            List<EndpointRegistry.ApiEndpoint> sorted = new ArrayList<>(snapshot);
+            sorted.sort(Comparator.comparing(EndpointRegistry.ApiEndpoint::host)
+                    .thenComparing(EndpointRegistry.ApiEndpoint::path));
+            this.rows = sorted;
+            fireTableDataChanged();
+        }
 
-        for (ApiEndpoint endpoint : endpoints.values()) {
-            Object[] row = {
-                endpoint.getHost(),
-                endpoint.getPath(),
-                String.join(", ", endpoint.getMethods()),
-                endpoint.getRequestCount()
+        @Override public int getRowCount()                  { return rows.size(); }
+        @Override public int getColumnCount()               { return COLUMNS.length; }
+        @Override public String getColumnName(int column)   { return COLUMNS[column]; }
+
+        @Override
+        public Object getValueAt(int rowIndex, int columnIndex) {
+            EndpointRegistry.ApiEndpoint endpoint = rows.get(rowIndex);
+            return switch (columnIndex) {
+                case 0 -> endpoint.host();
+                case 1 -> endpoint.path();
+                case 2 -> String.join(", ", endpoint.methods());
+                default -> "";
             };
-            tableModel.addRow(row);
         }
-
-        updateStats();
-    }
-
-    private void updateStats() {
-        Map<String, ApiEndpoint> endpoints = apiScanner.getDiscoveredEndpoints();
-        int totalEndpoints = endpoints.size();
-        int totalRequests = endpoints.values().stream()
-                                    .mapToInt(ApiEndpoint::getRequestCount)
-                                    .sum();
-
-        statsArea.setText(String.format(
-            "API Scanning Statistics\n" +
-            "══════════════════════\n" +
-            "Discovered Endpoints: %d\n" +
-            "Total API Requests:   %d\n\n" +
-            "Active Checks:\n" +
-            "  ✓ HTTP Method Fuzzing\n" +
-            "  ✓ BOLA (Broken Object Level Authorization)\n" +
-            "  ✓ Broken Authentication (JWT, tokens)\n" +
-            "  ✓ Mass Assignment\n" +
-            "  ✓ Excessive Data Exposure\n" +
-            "  ✓ Injection Attacks (SQL, NoSQL, Command, XSS)\n" +
-            "  ✓ SSRF Detection\n" +
-            "  ✓ Security Misconfiguration\n\n" +
-            "Check the Issues tab for discovered vulnerabilities.",
-            totalEndpoints, totalRequests
-        ));
-    }
-
-    private void startAutoRefresh() {
-        if (refreshTimer == null) {
-            refreshTimer = new Timer(5000, e -> refreshEndpointTable());
-            refreshTimer.start();
-        }
-    }
-
-    private void stopAutoRefresh() {
-        if (refreshTimer != null) {
-            refreshTimer.stop();
-            refreshTimer = null;
-        }
-    }
-
-    @Override
-    public String getTabCaption() {
-        return "API Scanner";
-    }
-
-    @Override
-    public Component getUiComponent() {
-        return mainPanel;
     }
 }

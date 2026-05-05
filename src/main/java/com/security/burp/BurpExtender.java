@@ -1,287 +1,158 @@
 package com.security.burp;
 
-import burp.*;
-import com.security.burp.scanner.ApiScanner;
+import burp.api.montoya.BurpExtension;
+import burp.api.montoya.EnhancedCapability;
+import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.core.BurpSuiteEdition;
+import burp.api.montoya.scanner.scancheck.ScanCheckType;
+import com.security.burp.ai.AiClient;
+import com.security.burp.ai.AiFieldDiscovery;
+import com.security.burp.ai.AiTriage;
+import com.security.burp.checks.active.BrokenAuthCheck;
+import com.security.burp.checks.active.BrokenObjectAuthCheck;
+import com.security.burp.checks.active.DeprecatedVersionProbeCheck;
+import com.security.burp.checks.active.FunctionLevelAuthCheck;
+import com.security.burp.checks.active.InjectionCheck;
+import com.security.burp.checks.active.MassAssignmentCheck;
+import com.security.burp.checks.active.MethodFuzzingCheck;
+import com.security.burp.checks.active.SsrfCheck;
+import com.security.burp.checks.passive.BusinessFlowCheck;
+import com.security.burp.checks.passive.ExcessiveDataExposureCheck;
+import com.security.burp.checks.passive.InventoryManagementCheck;
+import com.security.burp.checks.passive.ResourceConsumptionCheck;
+import com.security.burp.checks.passive.SecurityMisconfigCheck;
+import com.security.burp.checks.passive.UnsafeApiConsumptionCheck;
+import com.security.burp.scanner.EndpointRegistry;
 import com.security.burp.ui.ScannerTab;
-import java.io.PrintWriter;
-import java.util.List;
-import javax.swing.*;
 
-public class BurpExtender implements IBurpExtender, IHttpListener, IScannerCheck {
+import javax.swing.SwingUtilities;
+import java.util.Set;
 
-    private IBurpExtenderCallbacks callbacks;
-    private IExtensionHelpers helpers;
-    private PrintWriter stdout;
-    private PrintWriter stderr;
-    private ApiScanner apiScanner;
-    private ScannerTab scannerTab;
-    private boolean isDastMode;
+/**
+ * Extension entry point.
+ *
+ * <p>Responsibilities are intentionally narrow:
+ * <ul>
+ *   <li>declare the {@link EnhancedCapability#AI_FEATURES} capability so
+ *       Burp grants {@code api.ai()} access;</li>
+ *   <li>construct shared collaborators (registry, AI client/triage/field
+ *       discovery);</li>
+ *   <li>register each scan check individually with its appropriate
+ *       {@link ScanCheckType};</li>
+ *   <li>register the UI tab (Professional / Community only);</li>
+ *   <li>register an unloading handler that releases all resources.</li>
+ * </ul>
+ *
+ * <p>All other behaviour lives in collaborators.
+ */
+public final class BurpExtender implements BurpExtension {
+
+    private static final String EXTENSION_NAME = "Advanced API Security Scanner";
 
     @Override
-    public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
-        this.callbacks = callbacks;
-        this.helpers = callbacks.getHelpers();
-
-        // Set up output streams
-        stdout = new PrintWriter(callbacks.getStdout(), true);
-        stderr = new PrintWriter(callbacks.getStderr(), true);
-
-        // Detect DAST/headless mode
-        isDastMode = java.awt.GraphicsEnvironment.isHeadless();
-
-        // Set extension name
-        callbacks.setExtensionName("Advanced API Security Scanner V1");
-
-        // Initialize components with DAST mode flag
-        apiScanner = new ApiScanner(callbacks, helpers, stdout, stderr, isDastMode);
-
-        // Register as HTTP listener and scanner check
-        callbacks.registerHttpListener(this);
-        callbacks.registerScannerCheck(this);
-
-        // Create and add UI tab (only if not running in headless mode)
-        try {
-            if (!java.awt.GraphicsEnvironment.isHeadless()) {
-                SwingUtilities.invokeLater(() -> {
-                    try {
-                        scannerTab = new ScannerTab(callbacks, apiScanner);
-                        callbacks.addSuiteTab(scannerTab);
-                        stdout.println("UI tab loaded successfully");
-                    } catch (Exception e) {
-                        stdout.println("Running in headless mode - UI tab disabled");
-                    }
-                });
-            } else {
-                stdout.println("Running in headless mode (Burp Enterprise/DAST) - UI tab disabled");
-            }
-        } catch (Exception e) {
-            stdout.println("UI initialization skipped: " + e.getMessage());
-        }
-
-        stdout.println("====================================");
-        stdout.println("Advanced API Security Scanner V1");
-        stdout.println("OWASP API Security Top 10 2023");
-        stdout.println("Enhanced OWASP Categorization & Severity Levels");
-        stdout.println("Compatible with Burp Suite Professional & Enterprise Edition");
-        stdout.println("====================================");
-        stdout.println("Features:");
-        stdout.println("  ✅ API1:2023 - Broken Object Level Authorization");
-        stdout.println("  ✅ API2:2023 - Broken Authentication");
-        stdout.println("  ✅ API3:2023 - Broken Object Property Level Authorization");
-        stdout.println("  ⚠️ API4:2023 - Unrestricted Resource Consumption");
-        stdout.println("  ✅ API5:2023 - Broken Function Level Authorization");
-        stdout.println("  ⚠️ API6:2023 - Unrestricted Access to Sensitive Business Flows");
-        stdout.println("  ✅ API7:2023 - Server Side Request Forgery");
-        stdout.println("  ✅ API8:2023 - Security Misconfiguration");
-        stdout.println("  ⚠️ API9:2023 - Improper Inventory Management");
-        stdout.println("  ⚠️ API10:2023 - Unsafe Consumption of APIs");
-        stdout.println("====================================");
-        stdout.println("Key Features:");
-        stdout.println("  - HTTP Method Fuzzing (9 methods tested)");
-        stdout.println("  - Active + Passive Scanning");
-        stdout.println("  - JWT Security Testing");
-        stdout.println("  - Mass Assignment Detection");
-        stdout.println("  - SSRF Detection");
-        stdout.println("  - SQL/NoSQL/Command Injection");
-        stdout.println("====================================");
-        stdout.println("Extension loaded successfully!");
-        stdout.println("Mode: " + (java.awt.GraphicsEnvironment.isHeadless() ? "Headless (Enterprise)" : "Interactive (Pro)"));
+    public Set<EnhancedCapability> enhancedCapabilities() {
+        // Required for api.ai().isEnabled() to return true.
+        return Set.of(EnhancedCapability.AI_FEATURES);
     }
 
     @Override
-    public void processHttpMessage(int toolFlag, boolean messageIsRequest, IHttpRequestResponse messageInfo) {
-        // Only process proxy and scanner traffic
-        if (toolFlag != IBurpExtenderCallbacks.TOOL_PROXY &&
-            toolFlag != IBurpExtenderCallbacks.TOOL_SCANNER) {
-            return;
-        }
+    public void initialize(MontoyaApi api) {
+        api.extension().setName(EXTENSION_NAME);
 
-        try {
-            if (messageIsRequest) {
-                // Log request details (minimal logging in DAST mode)
-                IRequestInfo requestInfo = helpers.analyzeRequest(messageInfo);
-                String url = requestInfo.getUrl().toString();
-                String method = requestInfo.getMethod();
+        BurpSuiteEdition edition = api.burpSuite().version().edition();
+        boolean isEnterprise = edition == BurpSuiteEdition.ENTERPRISE_EDITION;
 
-                if (!isDastMode) {
-                    stdout.println("\n═══════════════════════════════════════");
-                    stdout.println("[REQUEST] " + method + " " + url);
-                    stdout.println("═══════════════════════════════════════");
-                }
+        EndpointRegistry endpoints = new EndpointRegistry();
+        AiClient aiClient = new AiClient(api);
+        AiTriage triage = new AiTriage(api, aiClient);
+        AiFieldDiscovery fieldDiscovery = new AiFieldDiscovery(api, aiClient);
 
-                // Check for Authorization header
-                List<String> headers = requestInfo.getHeaders();
-                boolean hasAuth = false;
-                boolean hasBearer = false;
+        registerScanChecks(api, endpoints, triage, fieldDiscovery);
 
-                for (String header : headers) {
-                    String lowerHeader = header.toLowerCase();
-                    if (lowerHeader.startsWith("authorization:")) {
-                        hasAuth = true;
-                        if (lowerHeader.contains("bearer")) {
-                            hasBearer = true;
-                            if (!isDastMode) {
-                                // Show first 50 chars of token for debugging
-                                stdout.println("  ✓ Authorization: " + header.substring(0, Math.min(50, header.length())) + "...");
-                            }
-                        } else {
-                            if (!isDastMode) {
-                                stdout.println("  ✓ Authorization: " + header);
-                            }
-                        }
-                    }
-                    // Also log other important headers
-                    if (lowerHeader.startsWith("content-type:") && !isDastMode) {
-                        stdout.println("  ✓ " + header);
-                    }
-                }
+        ScannerTab tab = isEnterprise ? null : registerUiTab(api, endpoints);
+        registerUnloadingHandler(api, aiClient, endpoints, tab);
 
-                // Only warn about missing auth in Interactive mode
-                if (!hasAuth && !isDastMode) {
-                    stdout.println("  ⚠️  WARNING: No Authorization header found");
-                } else if (!hasBearer && hasAuth && !isDastMode) {
-                    stdout.println("  ⚠️  WARNING: Authorization header found but not Bearer token");
-                }
-
-                // Log request body for POST/PUT (Interactive mode only)
-                if (!isDastMode && (method.equals("POST") || method.equals("PUT") || method.equals("PATCH"))) {
-                    int bodyOffset = requestInfo.getBodyOffset();
-                    byte[] request = messageInfo.getRequest();
-                    if (bodyOffset < request.length) {
-                        String body = new String(request, bodyOffset, Math.min(200, request.length - bodyOffset));
-                        stdout.println("  📄 Body: " + body.replace("\n", "").replace("\r", "") +
-                                     (request.length - bodyOffset > 200 ? "..." : ""));
-                    }
-                }
-
-                // Analyze request
-                apiScanner.analyzeRequest(messageInfo);
-
-            } else {
-                // Log response details
-                byte[] response = messageInfo.getResponse();
-                if (response != null) {
-                    IResponseInfo responseInfo = helpers.analyzeResponse(response);
-                    IRequestInfo requestInfo = helpers.analyzeRequest(messageInfo);
-                    String url = requestInfo.getUrl().toString();
-                    String urlPath = requestInfo.getUrl().getPath().toLowerCase();
-                    short statusCode = responseInfo.getStatusCode();
-
-                    // Check if request had Authorization header
-                    List<String> requestHeaders = requestInfo.getHeaders();
-                    boolean hadAuthHeader = false;
-                    for (String header : requestHeaders) {
-                        if (header.toLowerCase().startsWith("authorization:")) {
-                            hadAuthHeader = true;
-                            break;
-                        }
-                    }
-
-                    // Determine if this is a login/auth endpoint
-                    boolean isAuthEndpoint = urlPath.contains("/login") ||
-                                           urlPath.contains("/auth") ||
-                                           urlPath.contains("/signin") ||
-                                           urlPath.contains("/token") ||
-                                           urlPath.contains("/register");
-
-                    // Color code status
-                    String statusColor;
-                    String statusEmoji;
-                    if (statusCode >= 200 && statusCode < 300) {
-                        statusColor = "SUCCESS";
-                        statusEmoji = "✅";
-                    } else if (statusCode == 401 || statusCode == 403) {
-                        // Determine if this is expected or unexpected
-                        if (!hadAuthHeader) {
-                            // Expected: Testing without auth (security test)
-                            statusColor = "AUTH REQUIRED (Expected)";
-                            statusEmoji = "🔒";
-                        } else if (isAuthEndpoint) {
-                            // Expected: Testing login with invalid creds
-                            statusColor = "AUTH FAILED (Expected)";
-                            statusEmoji = "🔒";
-                        } else {
-                            // Unexpected: Had auth but still got 401/403
-                            statusColor = "AUTH ERROR (Token Issue)";
-                            statusEmoji = "⚠️";
-                        }
-                    } else if (statusCode >= 400 && statusCode < 500) {
-                        statusColor = "CLIENT ERROR";
-                        statusEmoji = "⚠️";
-                    } else if (statusCode >= 500) {
-                        statusColor = "SERVER ERROR";
-                        statusEmoji = "❌";
-                    } else {
-                        statusColor = "REDIRECT";
-                        statusEmoji = "↪️";
-                    }
-
-                    // In DAST mode, suppress expected auth failure messages to reduce noise
-                    if (!isDastMode) {
-                        stdout.println("[RESPONSE] " + statusEmoji + " " + statusCode + " (" + statusColor + ") for " + url);
-                    }
-
-                    // Only show detailed troubleshooting for UNEXPECTED auth errors
-                    if ((statusCode == 401 || statusCode == 403) && hadAuthHeader && !isAuthEndpoint) {
-                        // UNEXPECTED auth failure - always log this
-                        stdout.println("[RESPONSE] " + statusEmoji + " " + statusCode + " (" + statusColor + ") for " + url);
-                        stdout.println("─────────────────────────────────────");
-                        stdout.println("⚠️ UNEXPECTED AUTH FAILURE (Token may be invalid/expired)");
-                        stdout.println("─────────────────────────────────────");
-
-                        // Parse and show error message
-                        int bodyOffset = responseInfo.getBodyOffset();
-                        if (bodyOffset < response.length) {
-                            String responseBody = new String(response, bodyOffset, Math.min(500, response.length - bodyOffset));
-                            stdout.println("  Error Response: " + responseBody);
-                        }
-
-                        stdout.println("\n  💡 Action Required:");
-                        stdout.println("  - Token may be expired or invalid");
-                        stdout.println("  - Check Burp's Session Handling Rules");
-                        stdout.println("  - Verify token is still valid");
-                        stdout.println("─────────────────────────────────────\n");
-                    } else if ((statusCode == 401 || statusCode == 403) && !hadAuthHeader && !isDastMode) {
-                        // Expected auth failure - only log in Interactive mode
-                        stdout.println("  ℹ️  Security Test: Endpoint requires authentication (as expected)");
-                    } else if (statusCode >= 200 && statusCode < 300 && !isDastMode) {
-                        // Success - log in Interactive mode
-                        stdout.println("[RESPONSE] " + statusEmoji + " " + statusCode + " (" + statusColor + ") for " + url);
-                    }
-
-                    // Always report 500 errors as these indicate potential DoS/resource exhaustion
-                    if (statusCode >= 500) {
-                        stdout.println("  ⚠️  POTENTIAL VULNERABILITY: Server error may indicate resource exhaustion or crash");
-                    }
-                }
-            }
-        } catch (Exception e) {
-            stderr.println("[ERROR] Exception in processHttpMessage: " + e.getMessage());
-            e.printStackTrace(stderr);
-        }
+        logBanner(api, edition, aiClient.isAvailable());
     }
 
-    @Override
-    public List<IScanIssue> doPassiveScan(IHttpRequestResponse baseRequestResponse) {
-        stdout.println("[BurpExtender] doPassiveScan called for: " +
-                      helpers.analyzeRequest(baseRequestResponse).getUrl().toString());
-        return apiScanner.doPassiveScan(baseRequestResponse);
+    // ---- Scan-check registration -------------------------------------------
+
+    private void registerScanChecks(MontoyaApi api,
+                                    EndpointRegistry endpoints,
+                                    AiTriage triage,
+                                    AiFieldDiscovery fieldDiscovery) {
+        // Active checks. Frequency reflects what each check operates on.
+        // PER_INSERTION_POINT — checks that mutate parameters.
+        api.scanner().registerActiveScanCheck(
+                new InjectionCheck(api),                          ScanCheckType.PER_INSERTION_POINT);
+        api.scanner().registerActiveScanCheck(
+                new SsrfCheck(api),                               ScanCheckType.PER_INSERTION_POINT);
+        api.scanner().registerActiveScanCheck(
+                new MassAssignmentCheck(api, fieldDiscovery),     ScanCheckType.PER_INSERTION_POINT);
+        // PER_HOST — checks that operate on endpoints/methods rather than parameters.
+        api.scanner().registerActiveScanCheck(
+                new MethodFuzzingCheck(api),                      ScanCheckType.PER_HOST);
+        api.scanner().registerActiveScanCheck(
+                new BrokenObjectAuthCheck(api),                   ScanCheckType.PER_HOST);
+        api.scanner().registerActiveScanCheck(
+                new FunctionLevelAuthCheck(api),                  ScanCheckType.PER_HOST);
+        api.scanner().registerActiveScanCheck(
+                new BrokenAuthCheck(api),                         ScanCheckType.PER_HOST);
+        api.scanner().registerActiveScanCheck(
+                new DeprecatedVersionProbeCheck(api),             ScanCheckType.PER_HOST);
+
+        // Passive checks. PER_REQUEST runs once per HTTP transaction. AiTriage
+        // filters out contextual false positives for each before they surface.
+        api.scanner().registerPassiveScanCheck(
+                new BusinessFlowCheck(api, endpoints, triage),           ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new ExcessiveDataExposureCheck(api, endpoints, triage),  ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new InventoryManagementCheck(api, endpoints, triage),    ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new ResourceConsumptionCheck(api, endpoints, triage),    ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new SecurityMisconfigCheck(api, endpoints, triage),      ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new UnsafeApiConsumptionCheck(api, endpoints, triage),   ScanCheckType.PER_REQUEST);
     }
 
-    @Override
-    public List<IScanIssue> doActiveScan(IHttpRequestResponse baseRequestResponse, IScannerInsertionPoint insertionPoint) {
-        stdout.println("[BurpExtender] doActiveScan called for: " +
-                      helpers.analyzeRequest(baseRequestResponse).getUrl().toString());
-        return apiScanner.doActiveScan(baseRequestResponse, insertionPoint);
+    // ---- UI ----------------------------------------------------------------
+
+    private ScannerTab registerUiTab(MontoyaApi api, EndpointRegistry endpoints) {
+        ScannerTab tab = new ScannerTab(endpoints, api.userInterface().swingUtils());
+        SwingUtilities.invokeLater(() -> {
+            // Pick up Burp's current theme (light / dark / high-contrast). Without
+            // this the tab uses Swing defaults and looks out of place against a
+            // dark Burp theme.
+            api.userInterface().applyThemeToComponent(tab.component());
+            api.userInterface().registerSuiteTab("API Scanner", tab.component());
+        });
+        return tab;
     }
 
-    @Override
-    public int consolidateDuplicateIssues(IScanIssue existingIssue, IScanIssue newIssue) {
-        // Consolidate if same issue type and URL
-        if (existingIssue.getIssueName().equals(newIssue.getIssueName()) &&
-            existingIssue.getUrl().equals(newIssue.getUrl())) {
-            return -1; // Keep existing issue
-        }
-        return 0; // Keep both issues
+    // ---- Unloading ---------------------------------------------------------
+
+    private void registerUnloadingHandler(MontoyaApi api,
+                                          AiClient aiClient,
+                                          EndpointRegistry endpoints,
+                                          ScannerTab tab) {
+        api.extension().registerUnloadingHandler(() -> {
+            aiClient.shutdown();
+            endpoints.clear();
+            if (tab != null) tab.dispose();
+            api.logging().logToOutput("[" + EXTENSION_NAME + "] Unloaded cleanly.");
+        });
+    }
+
+    // ---- Banner ------------------------------------------------------------
+
+    private void logBanner(MontoyaApi api, BurpSuiteEdition edition, boolean aiAvailable) {
+        api.logging().logToOutput("====================================");
+        api.logging().logToOutput(EXTENSION_NAME + " v2.0.0");
+        api.logging().logToOutput("OWASP API Security Top 10 (2023) coverage");
+        api.logging().logToOutput("Edition: " + edition);
+        api.logging().logToOutput("AI features: " + (aiAvailable ? "enabled" : "disabled"));
+        api.logging().logToOutput("====================================");
     }
 }

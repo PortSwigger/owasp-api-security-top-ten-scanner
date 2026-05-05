@@ -349,18 +349,6 @@ BurpExtender (Main)
 └── CustomScanIssue (Reporting)
 ```
 
-## 🧪 Testing the Extension
-
-You can test the extension against the included vulnerable API server:
-
-```bash
-cd ..  # back to claude directory
-npm install
-node server.js
-```
-
-Then configure Burp to proxy requests to `http://localhost:3000` and test the various API endpoints.
-
 ## 📚 References
 
 - [OWASP API Security Top 10 2023](https://owasp.org/API-Security/editions/2023/en/0x00-header/)
