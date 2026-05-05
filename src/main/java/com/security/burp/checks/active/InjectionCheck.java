@@ -68,7 +68,11 @@ public final class InjectionCheck extends AbstractActiveCheck {
 
         List<AuditIssue> issues = new ArrayList<>();
         addFirstFinding(issues, runSql(rr, ip, http));
-        if (HttpUtils.isJson(rr.request())) addFirstFinding(issues, runNoSql(rr, ip, http));
+        // NoSQL is the one family that fires per matching payload rather than
+        // first match — the bypass-behavior path (200 OK to a $ne payload) is
+        // a heuristic worth surfacing for every payload that triggers it,
+        // matching the legacy v1 behavior.
+        if (HttpUtils.isJson(rr.request())) issues.addAll(runNoSql(rr, ip, http));
         addFirstFinding(issues, runCommand(rr, ip, http));
         addFirstFinding(issues, runXss(rr, ip, http));
         return issues;
@@ -102,34 +106,49 @@ public final class InjectionCheck extends AbstractActiveCheck {
     /**
      * NoSQL has two detection paths preserved from the legacy implementation:
      * <ul>
-     *   <li>response carries a NoSQL driver error string — high confidence;</li>
+     *   <li>response carries a NoSQL driver error string — high confidence,
+     *       fires once and short-circuits the rest of the family;</li>
      *   <li>response is a 200 to a payload containing a Mongo operator
      *       (e.g. {@code $ne}) — heuristic "potential bypass" signal,
-     *       reported as Tentative confidence.</li>
+     *       reported as Tentative confidence; fires for <em>every</em>
+     *       payload that matches, since each payload represents a distinct
+     *       piece of evidence the reviewer can inspect.</li>
      * </ul>
      */
-    private AuditIssue runNoSql(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
-        return runFamilyWithEvidence(rr, ip, http, InjectionPayloads.NOSQL,
-                (response, payload) -> {
-                    if (bodyContainsAny(response, InjectionPayloads.NOSQL_ERROR_MARKERS)) {
-                        return new Verdict("High", "Firm",
-                                "Server response carried a NoSQL driver error after the " +
-                                "operator payload was delivered.");
-                    }
-                    if (response.statusCode() == 200 && payload.contains("$ne")) {
-                        return new Verdict("High", "Tentative",
-                                "Endpoint returned 200 OK to a Mongo operator payload " +
-                                "(<code>" + escape(payload) + "</code>). The application " +
-                                "appears to accept the operator object without an error — " +
-                                "consistent with a missing input-shape check that may permit " +
-                                "authentication or filter bypass.");
-                    }
-                    return null;
-                },
-                (base, evidence, payload, verdict) -> buildIssue(base, evidence, ip, payload,
-                        "API2:2023 - Broken Authentication (NoSQL Injection)",
-                        verdict.detail(),
-                        verdict.severity(), verdict.confidence(), SQL_BACKGROUND));
+    private List<AuditIssue> runNoSql(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
+        List<AuditIssue> findings = new ArrayList<>();
+        for (String payload : InjectionPayloads.NOSQL) {
+            HttpRequestResponse evidence = sendPayload(rr, ip, http, payload);
+            if (evidence == null) continue;
+
+            if (bodyContainsAny(evidence.response(), InjectionPayloads.NOSQL_ERROR_MARKERS)) {
+                findings.add(buildNoSqlIssue(rr, evidence, ip, payload, "Firm",
+                        "Server response carried a NoSQL driver error after the operator " +
+                        "payload was delivered."));
+                return findings; // confirmed error — no need to keep probing.
+            }
+            if (evidence.response().statusCode() == 200 && payload.contains("$ne")) {
+                findings.add(buildNoSqlIssue(rr, evidence, ip, payload, "Tentative",
+                        "Endpoint returned 200 OK to a Mongo operator payload " +
+                        "(<code>" + escape(payload) + "</code>). The application appears " +
+                        "to accept the operator object without an error — consistent with " +
+                        "a missing input-shape check that may permit authentication or " +
+                        "filter bypass."));
+                // No short-circuit: keep probing remaining payloads.
+            }
+        }
+        return findings;
+    }
+
+    private AuditIssue buildNoSqlIssue(HttpRequestResponse base,
+                                       HttpRequestResponse evidence,
+                                       AuditInsertionPoint ip,
+                                       String payload,
+                                       String confidence,
+                                       String summary) {
+        return buildIssue(base, evidence, ip, payload,
+                "API2:2023 - Broken Authentication (NoSQL Injection)",
+                summary, "High", confidence, SQL_BACKGROUND);
     }
 
     private AuditIssue runCommand(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
@@ -175,22 +194,6 @@ public final class InjectionCheck extends AbstractActiveCheck {
             if (evidence == null) continue;
             String severity = trigger.severityFor(evidence.response(), payload);
             if (severity != null) return builder.build(rr, evidence, payload, severity);
-        }
-        return null;
-    }
-
-    /** Shape used by NoSQL where the trigger needs to vary confidence too. */
-    private AuditIssue runFamilyWithEvidence(HttpRequestResponse rr,
-                                             AuditInsertionPoint ip,
-                                             Http http,
-                                             List<String> payloads,
-                                             EvidenceTrigger trigger,
-                                             EvidenceFindingBuilder builder) {
-        for (String payload : payloads) {
-            HttpRequestResponse evidence = sendPayload(rr, ip, http, payload);
-            if (evidence == null) continue;
-            Verdict verdict = trigger.verdictFor(evidence.response(), payload);
-            if (verdict != null) return builder.build(rr, evidence, payload, verdict);
         }
         return null;
     }
@@ -249,9 +252,6 @@ public final class InjectionCheck extends AbstractActiveCheck {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
-    /** Verdict returned from an evidence-aware trigger (used by NoSQL). */
-    private record Verdict(String severity, String confidence, String detail) {}
-
     @FunctionalInterface
     private interface SeverityTrigger {
         /** Returns the severity to fire at, or null if the response doesn't trigger. */
@@ -262,17 +262,5 @@ public final class InjectionCheck extends AbstractActiveCheck {
     private interface SeverityFindingBuilder {
         AuditIssue build(HttpRequestResponse base, HttpRequestResponse evidence,
                          String payload, String severity);
-    }
-
-    @FunctionalInterface
-    private interface EvidenceTrigger {
-        /** Returns the verdict to fire, or null if the response doesn't trigger. */
-        Verdict verdictFor(HttpResponse response, String payload);
-    }
-
-    @FunctionalInterface
-    private interface EvidenceFindingBuilder {
-        AuditIssue build(HttpRequestResponse base, HttpRequestResponse evidence,
-                         String payload, Verdict verdict);
     }
 }
