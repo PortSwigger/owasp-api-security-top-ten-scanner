@@ -2,6 +2,7 @@ package com.security.burp.checks.active;
 
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.Http;
+import burp.api.montoya.http.message.HttpHeader;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.scanner.audit.insertionpoint.AuditInsertionPoint;
@@ -109,7 +110,7 @@ public final class DeprecatedVersionProbeCheck extends AbstractActiveCheck {
                 .withMethod(base.method())
                 .withBody(base.bodyToString());
         // Re-attach headers other than Host (httpRequestFromUrl already sets Host).
-        for (var header : base.headers()) {
+        for (HttpHeader header : base.headers()) {
             if (header.name() != null && !"host".equalsIgnoreCase(header.name())) {
                 result = result.withAddedHeader(header);
             }

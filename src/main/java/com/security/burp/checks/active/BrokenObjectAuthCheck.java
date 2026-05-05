@@ -146,10 +146,20 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
             String oldUrl = rr.request().url();
             String newUrl = oldUrl.replaceFirst("/" + originalId + "(?=/|$)", "/" + newId);
             if (newUrl.equals(oldUrl)) return null;
+
+            // httpRequestFromUrl already inserts a Host header derived from the
+            // URL. Adding rr.request().headers() on top of that produces a
+            // duplicate Host header — which some servers reject with 4xx,
+            // making this whole check appear to find nothing. Re-attach every
+            // original header except Host.
             HttpRequest mutated = HttpRequest.httpRequestFromUrl(newUrl)
                     .withMethod(rr.request().method())
-                    .withAddedHeaders(rr.request().headers())
                     .withBody(rr.request().bodyToString());
+            for (HttpHeader header : rr.request().headers()) {
+                if (header.name() != null && !"host".equalsIgnoreCase(header.name())) {
+                    mutated = mutated.withAddedHeader(header);
+                }
+            }
             return sendIfSuccess(mutated, http);
         } catch (Exception e) {
             api.logging().logToError("[BOLA] sendWithReplacedId failed: " + e.getMessage());

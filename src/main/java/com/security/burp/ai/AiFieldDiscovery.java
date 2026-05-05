@@ -2,6 +2,7 @@ package com.security.burp.ai;
 
 import burp.api.montoya.MontoyaApi;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -123,7 +124,7 @@ public final class AiFieldDiscovery {
         for (String key : existingKeys) existingLower.add(key.toLowerCase(Locale.ROOT));
 
         List<String> out = new ArrayList<>();
-        for (var element : fields) {
+        for (JsonElement element : fields) {
             String raw = element.isJsonPrimitive() ? element.getAsString() : "";
             String name = NON_NAME_CHAR.matcher(raw.trim()).replaceAll("");
             if (name.isEmpty() || name.length() > MAX_NAME_LENGTH) continue;
