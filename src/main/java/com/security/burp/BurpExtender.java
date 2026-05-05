@@ -118,8 +118,13 @@ public final class BurpExtender implements BurpExtension {
 
     private ScannerTab registerUiTab(MontoyaApi api, EndpointRegistry endpoints) {
         ScannerTab tab = new ScannerTab(endpoints, api.userInterface().swingUtils());
-        SwingUtilities.invokeLater(() ->
-                api.userInterface().registerSuiteTab("API Scanner", tab.component()));
+        SwingUtilities.invokeLater(() -> {
+            // Pick up Burp's current theme (light / dark / high-contrast). Without
+            // this the tab uses Swing defaults and looks out of place against a
+            // dark Burp theme.
+            api.userInterface().applyThemeToComponent(tab.component());
+            api.userInterface().registerSuiteTab("API Scanner", tab.component());
+        });
         return tab;
     }
 
