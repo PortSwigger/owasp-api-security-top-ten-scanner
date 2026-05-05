@@ -8,8 +8,19 @@ import burp.api.montoya.scanner.scancheck.ScanCheckType;
 import com.security.burp.ai.AiClient;
 import com.security.burp.ai.AiFieldDiscovery;
 import com.security.burp.ai.AiTriage;
+import com.security.burp.checks.active.BrokenAuthCheck;
+import com.security.burp.checks.active.BrokenObjectAuthCheck;
+import com.security.burp.checks.active.FunctionLevelAuthCheck;
+import com.security.burp.checks.active.InjectionCheck;
+import com.security.burp.checks.active.MassAssignmentCheck;
+import com.security.burp.checks.active.MethodFuzzingCheck;
 import com.security.burp.checks.active.SsrfCheck;
 import com.security.burp.checks.passive.BusinessFlowCheck;
+import com.security.burp.checks.passive.ExcessiveDataExposureCheck;
+import com.security.burp.checks.passive.InventoryManagementCheck;
+import com.security.burp.checks.passive.ResourceConsumptionCheck;
+import com.security.burp.checks.passive.SecurityMisconfigCheck;
+import com.security.burp.checks.passive.UnsafeApiConsumptionCheck;
 import com.security.burp.scanner.EndpointRegistry;
 import com.security.burp.ui.ScannerTab;
 
@@ -70,18 +81,37 @@ public final class BurpExtender implements BurpExtension {
                                     AiTriage triage,
                                     AiFieldDiscovery fieldDiscovery) {
         // Active checks. Frequency reflects what each check operates on.
+        // PER_INSERTION_POINT — checks that mutate parameters.
         api.scanner().registerActiveScanCheck(
-                new SsrfCheck(api), ScanCheckType.PER_INSERTION_POINT);
+                new InjectionCheck(api),                          ScanCheckType.PER_INSERTION_POINT);
+        api.scanner().registerActiveScanCheck(
+                new SsrfCheck(api),                               ScanCheckType.PER_INSERTION_POINT);
+        api.scanner().registerActiveScanCheck(
+                new MassAssignmentCheck(api, fieldDiscovery),     ScanCheckType.PER_INSERTION_POINT);
+        // PER_HOST — checks that operate on endpoints/methods rather than parameters.
+        api.scanner().registerActiveScanCheck(
+                new MethodFuzzingCheck(api),                      ScanCheckType.PER_HOST);
+        api.scanner().registerActiveScanCheck(
+                new BrokenObjectAuthCheck(api),                   ScanCheckType.PER_HOST);
+        api.scanner().registerActiveScanCheck(
+                new FunctionLevelAuthCheck(api),                  ScanCheckType.PER_HOST);
+        api.scanner().registerActiveScanCheck(
+                new BrokenAuthCheck(api),                         ScanCheckType.PER_HOST);
 
-        // Passive checks. PER_REQUEST runs once per HTTP transaction.
+        // Passive checks. PER_REQUEST runs once per HTTP transaction. AiTriage
+        // filters out contextual false positives for each before they surface.
         api.scanner().registerPassiveScanCheck(
-                new BusinessFlowCheck(api, endpoints, triage), ScanCheckType.PER_REQUEST);
-
-        // Other checks (mass assignment with field discovery, injection, etc.)
-        // will be added as they are migrated to the v2 architecture.
-        // fieldDiscovery is referenced once so the field is not unused; it
-        // belongs to mass-assignment and will be passed in when that check lands.
-        if (fieldDiscovery == null) throw new IllegalStateException();
+                new BusinessFlowCheck(api, endpoints, triage),           ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new ExcessiveDataExposureCheck(api, endpoints, triage),  ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new InventoryManagementCheck(api, endpoints, triage),    ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new ResourceConsumptionCheck(api, endpoints, triage),    ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new SecurityMisconfigCheck(api, endpoints, triage),      ScanCheckType.PER_REQUEST);
+        api.scanner().registerPassiveScanCheck(
+                new UnsafeApiConsumptionCheck(api, endpoints, triage),   ScanCheckType.PER_REQUEST);
     }
 
     // ---- UI ----------------------------------------------------------------
