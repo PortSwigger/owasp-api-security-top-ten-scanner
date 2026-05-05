@@ -8,7 +8,6 @@ import com.security.burp.checks.AbstractPassiveCheck;
 import com.security.burp.scanner.EndpointRegistry;
 import com.security.burp.util.IssueBuilder;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -16,26 +15,19 @@ import java.util.Set;
 /**
  * OWASP API10:2023 — Unsafe Consumption of APIs.
  *
- * <p>Two heuristics:
- * <ul>
- *   <li>response body references a well-known third-party API host (Google,
- *       Stripe, Twilio, ...) without obvious signs of validation;</li>
- *   <li>request path looks like a webhook receiver — webhook handlers are a
- *       common locus of unsafe consumption (no signature verification, no
- *       schema enforcement).</li>
- * </ul>
+ * <p>Webhook-receiver detection only. The earlier "third-party API
+ * reference in response body" detector was dropped per security-research
+ * feedback (Zak): hardcoded substrings like {@code googleapis.com}
+ * produced a lot of noise on real targets without much signal — modern
+ * web apps legitimately mention third-party domains all the time, and
+ * the presence of a string is a poor proxy for unsafe consumption.
+ *
+ * <p>Webhook detection is kept because the path-keyword signal is
+ * tight: receivers named {@code /webhook}, {@code /callback}, etc. are
+ * specifically vulnerable to skipped signature verification and
+ * downstream injection from external sources.
  */
 public final class UnsafeApiConsumptionCheck extends AbstractPassiveCheck {
-
-    /** Hosts whose appearance in a response strongly implies third-party consumption. */
-    private static final Set<String> THIRD_PARTY_HOSTS = Set.of(
-            "googleapis.com", "github.com", "stripe.com", "twilio.com",
-            "sendgrid.com", "amazonaws.com", "azure.com", "cloudflare.com",
-            "slack.com", "api.twitter.com", "graph.facebook.com");
-
-    /** Heuristic markers that the response body shows validation occurring. */
-    private static final Set<String> VALIDATION_MARKERS = Set.of(
-            "\"validated\"", "\"sanitized\"", "\"verified\"");
 
     /** Path keywords identifying webhook / external-event receivers. */
     private static final Set<String> WEBHOOK_PATH_KEYWORDS = Set.of(
@@ -59,35 +51,8 @@ public final class UnsafeApiConsumptionCheck extends AbstractPassiveCheck {
     @Override
     protected List<AuditIssue> audit(HttpRequestResponse rr) {
         if (!rr.hasResponse()) return List.of();
-
-        List<AuditIssue> issues = new ArrayList<>();
-        String body = rr.response().bodyToString();
-        String thirdParty = referencedThirdParty(body);
-        if (thirdParty != null && !looksValidated(body)) {
-            issues.add(buildThirdPartyIssue(rr, thirdParty));
-        }
-        if (isWebhookPath(rr.request().pathWithoutQuery())) {
-            issues.add(buildWebhookIssue(rr));
-        }
-        return issues;
-    }
-
-    // ---- Detection ---------------------------------------------------------
-
-    private static String referencedThirdParty(String body) {
-        if (body == null) return null;
-        for (String host : THIRD_PARTY_HOSTS) {
-            if (body.contains(host)) return host;
-        }
-        return null;
-    }
-
-    private static boolean looksValidated(String body) {
-        if (body == null) return false;
-        for (String marker : VALIDATION_MARKERS) {
-            if (body.contains(marker)) return true;
-        }
-        return false;
+        if (!isWebhookPath(rr.request().pathWithoutQuery())) return List.of();
+        return List.of(buildWebhookIssue(rr));
     }
 
     private static boolean isWebhookPath(String path) {
@@ -97,27 +62,6 @@ public final class UnsafeApiConsumptionCheck extends AbstractPassiveCheck {
             if (lower.contains(keyword)) return true;
         }
         return false;
-    }
-
-    // ---- Issues ------------------------------------------------------------
-
-    private AuditIssue buildThirdPartyIssue(HttpRequestResponse rr, String host) {
-        String detail =
-                "The response references a third-party API host (<code>" + host + "</code>) " +
-                "and shows no obvious signs of validation. Untrusted upstream data flowing " +
-                "through this endpoint may carry injection payloads or violate downstream " +
-                "schema assumptions.";
-        String remediation =
-                "Treat third-party data as untrusted: validate against an explicit schema, " +
-                "sanitize, and rate-limit consumption.";
-        return IssueBuilder.issue(rr)
-                .name("API10:2023 - Unsafe Consumption of APIs (Third-Party Reference)")
-                .detail(detail)
-                .remediation(remediation)
-                .background(ISSUE_BACKGROUND)
-                .severity("Medium")
-                .confidence("Tentative")
-                .build();
     }
 
     private AuditIssue buildWebhookIssue(HttpRequestResponse rr) {

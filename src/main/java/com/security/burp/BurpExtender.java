@@ -10,6 +10,7 @@ import com.security.burp.ai.AiFieldDiscovery;
 import com.security.burp.ai.AiTriage;
 import com.security.burp.checks.active.BrokenAuthCheck;
 import com.security.burp.checks.active.BrokenObjectAuthCheck;
+import com.security.burp.checks.active.DeprecatedVersionProbeCheck;
 import com.security.burp.checks.active.FunctionLevelAuthCheck;
 import com.security.burp.checks.active.InjectionCheck;
 import com.security.burp.checks.active.MassAssignmentCheck;
@@ -97,6 +98,8 @@ public final class BurpExtender implements BurpExtension {
                 new FunctionLevelAuthCheck(api),                  ScanCheckType.PER_HOST);
         api.scanner().registerActiveScanCheck(
                 new BrokenAuthCheck(api),                         ScanCheckType.PER_HOST);
+        api.scanner().registerActiveScanCheck(
+                new DeprecatedVersionProbeCheck(api),             ScanCheckType.PER_HOST);
 
         // Passive checks. PER_REQUEST runs once per HTTP transaction. AiTriage
         // filters out contextual false positives for each before they surface.

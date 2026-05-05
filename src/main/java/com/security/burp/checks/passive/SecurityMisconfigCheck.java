@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * OWASP API8:2023 — Security Misconfiguration.
@@ -41,9 +42,35 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
         RECOMMENDED_HEADERS.put("Strict-Transport-Security",  "max-age value");
     }
 
-    private static final Set<String> DISCLOSURE_HEADERS = Set.of(
-            "server", "x-powered-by", "x-aspnet-version",
-            "x-aspnetmvc-version", "x-runtime");
+    /**
+     * Headers that disclose technology / version information, paired with a
+     * pattern the value must match before the finding fires.
+     *
+     * <p>Naive presence-based detection (Zak, security research) generates
+     * a lot of noise on real targets — every CDN sets <code>Server:
+     * cloudflare</code>, every static-content host returns a generic
+     * <code>Server</code> value. Only fire on values that genuinely
+     * disclose a versioned product, or on headers whose only purpose is
+     * tech-stack disclosure (X-Powered-By and friends).
+     *
+     * <p>Pattern reference:
+     * <a href="https://github.com/augustd/burp-suite-software-version-checks/blob/master/src/main/resources/burp/match-rules.tab">burp-suite-software-version-checks</a>.
+     */
+    private static final Pattern VERSIONED = Pattern.compile(".+/[\\d.]+.*");
+    private static final Pattern ANY_VALUE = Pattern.compile(".+");
+
+    private static final Map<String, DisclosurePattern> DISCLOSURE_PATTERNS = new LinkedHashMap<>();
+    static {
+        DISCLOSURE_PATTERNS.put("server",              new DisclosurePattern(VERSIONED, "Server version"));
+        DISCLOSURE_PATTERNS.put("x-powered-by",        new DisclosurePattern(ANY_VALUE, "X-Powered-By technology"));
+        DISCLOSURE_PATTERNS.put("x-aspnet-version",    new DisclosurePattern(ANY_VALUE, "ASP.NET version"));
+        DISCLOSURE_PATTERNS.put("x-aspnetmvc-version", new DisclosurePattern(ANY_VALUE, "ASP.NET MVC version"));
+        DISCLOSURE_PATTERNS.put("x-runtime",           new DisclosurePattern(ANY_VALUE, "Runtime version"));
+        DISCLOSURE_PATTERNS.put("x-version",           new DisclosurePattern(ANY_VALUE, "Application version"));
+        DISCLOSURE_PATTERNS.put("x-generator",         new DisclosurePattern(ANY_VALUE, "Framework generator"));
+    }
+
+    private record DisclosurePattern(Pattern valueMatch, String label) {}
 
     /** Phrases in a 4xx/5xx response body that suggest a verbose error. */
     private static final Set<String> ERROR_LEAK_MARKERS = Set.of(
@@ -94,8 +121,12 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
         List<String> found = new ArrayList<>();
         for (HttpHeader header : rr.response().headers()) {
             String name = header.name() == null ? "" : header.name().toLowerCase(Locale.ROOT);
-            if (DISCLOSURE_HEADERS.contains(name)) {
-                found.add(header.name() + ": " + header.value());
+            DisclosurePattern pattern = DISCLOSURE_PATTERNS.get(name);
+            if (pattern == null) continue;
+            String value = header.value();
+            if (value == null) continue;
+            if (pattern.valueMatch().matcher(value).matches()) {
+                found.add(header.name() + ": " + value);
             }
         }
         if (!found.isEmpty()) sink.add(buildDisclosureHeadersIssue(rr, found));
