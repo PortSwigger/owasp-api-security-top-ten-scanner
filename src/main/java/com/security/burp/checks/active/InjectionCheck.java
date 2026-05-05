@@ -5,6 +5,7 @@ import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.Http;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
 import burp.api.montoya.scanner.audit.insertionpoint.AuditInsertionPoint;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import com.security.burp.checks.AbstractActiveCheck;
@@ -19,7 +20,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiPredicate;
 
 /**
  * OWASP API2:2023 / API8:2023 — Injection (SQL, NoSQL, command, XSS).
@@ -90,73 +90,107 @@ public final class InjectionCheck extends AbstractActiveCheck {
     private AuditIssue runSql(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
         return runFamily(rr, ip, http,
                 InjectionPayloads.SQL,
-                (body, payload) -> containsAny(body.toLowerCase(Locale.ROOT),
-                        InjectionPayloads.SQL_ERROR_MARKERS),
-                (base, evidence, payload) -> buildIssue(base, evidence, ip, payload,
+                (response, payload) -> bodyContainsAny(response, InjectionPayloads.SQL_ERROR_MARKERS)
+                        ? "Critical" : null,
+                (base, evidence, payload, severity) -> buildIssue(base, evidence, ip, payload,
                         "API2:2023 - Broken Authentication (SQL Injection)",
                         "Server response carried a SQL engine error after the payload was " +
                         "delivered through this insertion point.",
-                        "Critical", SQL_BACKGROUND));
+                        severity, "Firm", SQL_BACKGROUND));
     }
 
+    /**
+     * NoSQL has two detection paths preserved from the legacy implementation:
+     * <ul>
+     *   <li>response carries a NoSQL driver error string — high confidence;</li>
+     *   <li>response is a 200 to a payload containing a Mongo operator
+     *       (e.g. {@code $ne}) — heuristic "potential bypass" signal,
+     *       reported as Tentative confidence.</li>
+     * </ul>
+     */
     private AuditIssue runNoSql(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
-        return runFamily(rr, ip, http,
-                InjectionPayloads.NOSQL,
-                (body, payload) -> containsAny(body.toLowerCase(Locale.ROOT),
-                        InjectionPayloads.NOSQL_ERROR_MARKERS),
-                (base, evidence, payload) -> buildIssue(base, evidence, ip, payload,
+        return runFamilyWithEvidence(rr, ip, http, InjectionPayloads.NOSQL,
+                (response, payload) -> {
+                    if (bodyContainsAny(response, InjectionPayloads.NOSQL_ERROR_MARKERS)) {
+                        return new Verdict("High", "Firm",
+                                "Server response carried a NoSQL driver error after the " +
+                                "operator payload was delivered.");
+                    }
+                    if (response.statusCode() == 200 && payload.contains("$ne")) {
+                        return new Verdict("High", "Tentative",
+                                "Endpoint returned 200 OK to a Mongo operator payload " +
+                                "(<code>" + escape(payload) + "</code>). The application " +
+                                "appears to accept the operator object without an error — " +
+                                "consistent with a missing input-shape check that may permit " +
+                                "authentication or filter bypass.");
+                    }
+                    return null;
+                },
+                (base, evidence, payload, verdict) -> buildIssue(base, evidence, ip, payload,
                         "API2:2023 - Broken Authentication (NoSQL Injection)",
-                        "Server response carried a NoSQL driver error after the operator " +
-                        "payload was delivered.",
-                        "High", SQL_BACKGROUND));
+                        verdict.detail(),
+                        verdict.severity(), verdict.confidence(), SQL_BACKGROUND));
     }
 
     private AuditIssue runCommand(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
         return runFamily(rr, ip, http,
                 InjectionPayloads.COMMAND,
-                (body, payload) -> {
-                    String lower = body.toLowerCase(Locale.ROOT);
-                    return containsAny(lower, InjectionPayloads.COMMAND_OUTPUT_MARKERS)
-                            || containsAny(lower, InjectionPayloads.COMMAND_ERROR_MARKERS);
+                (response, payload) -> {
+                    boolean output = bodyContainsAny(response, InjectionPayloads.COMMAND_OUTPUT_MARKERS);
+                    boolean error  = bodyContainsAny(response, InjectionPayloads.COMMAND_ERROR_MARKERS);
+                    return (output || error) ? "Critical" : null;
                 },
-                (base, evidence, payload) -> buildIssue(base, evidence, ip, payload,
+                (base, evidence, payload, severity) -> buildIssue(base, evidence, ip, payload,
                         "API8:2023 - Security Misconfiguration (Command Injection)",
                         "Response indicates the OS attempted to execute the injected payload " +
                         "(either by leaking output or producing a shell error).",
-                        "Critical", SQL_BACKGROUND));
+                        severity, "Firm", SQL_BACKGROUND));
     }
 
     private AuditIssue runXss(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
         return runFamily(rr, ip, http,
                 InjectionPayloads.XSS,
-                (body, payload) -> body.contains(payload),
-                (base, evidence, payload) -> buildIssue(base, evidence, ip, payload,
+                (response, payload) -> {
+                    String body = response.bodyToString();
+                    return (body != null && body.contains(payload)) ? "Medium" : null;
+                },
+                (base, evidence, payload, severity) -> buildIssue(base, evidence, ip, payload,
                         "API8:2023 - Security Misconfiguration (Reflected XSS in API Response)",
                         "Response reflects the payload unencoded. If the response is ever " +
                         "rendered as HTML this is exploitable.",
-                        "Medium", SQL_BACKGROUND));
+                        severity, "Firm", SQL_BACKGROUND));
     }
 
-    // ---- Generic family runner ---------------------------------------------
+    // ---- Generic family runners --------------------------------------------
 
-    /**
-     * Send each {@code payload} through the insertion point and call
-     * {@code findingBuilder} the first time {@code triggers} returns true.
-     */
+    /** Shape used by SQL/Command/XSS where the trigger only carries severity. */
     private AuditIssue runFamily(HttpRequestResponse rr,
                                  AuditInsertionPoint ip,
                                  Http http,
                                  List<String> payloads,
-                                 BiPredicate<String, String> triggers,
-                                 FindingBuilder findingBuilder) {
+                                 SeverityTrigger trigger,
+                                 SeverityFindingBuilder builder) {
         for (String payload : payloads) {
             HttpRequestResponse evidence = sendPayload(rr, ip, http, payload);
             if (evidence == null) continue;
-            String body = evidence.response().bodyToString();
-            if (body == null) continue;
-            if (triggers.test(body, payload)) {
-                return findingBuilder.build(rr, evidence, payload);
-            }
+            String severity = trigger.severityFor(evidence.response(), payload);
+            if (severity != null) return builder.build(rr, evidence, payload, severity);
+        }
+        return null;
+    }
+
+    /** Shape used by NoSQL where the trigger needs to vary confidence too. */
+    private AuditIssue runFamilyWithEvidence(HttpRequestResponse rr,
+                                             AuditInsertionPoint ip,
+                                             Http http,
+                                             List<String> payloads,
+                                             EvidenceTrigger trigger,
+                                             EvidenceFindingBuilder builder) {
+        for (String payload : payloads) {
+            HttpRequestResponse evidence = sendPayload(rr, ip, http, payload);
+            if (evidence == null) continue;
+            Verdict verdict = trigger.verdictFor(evidence.response(), payload);
+            if (verdict != null) return builder.build(rr, evidence, payload, verdict);
         }
         return null;
     }
@@ -175,8 +209,11 @@ public final class InjectionCheck extends AbstractActiveCheck {
         }
     }
 
-    private static boolean containsAny(String haystack, List<String> needles) {
-        for (String needle : needles) if (haystack.contains(needle)) return true;
+    private static boolean bodyContainsAny(HttpResponse response, List<String> needlesLower) {
+        String body = response.bodyToString();
+        if (body == null) return false;
+        String lower = body.toLowerCase(Locale.ROOT);
+        for (String needle : needlesLower) if (lower.contains(needle)) return true;
         return false;
     }
 
@@ -189,6 +226,7 @@ public final class InjectionCheck extends AbstractActiveCheck {
                                   String name,
                                   String summary,
                                   String severity,
+                                  String confidence,
                                   String background) {
         String detail =
                 summary + "<br><br>" +
@@ -202,7 +240,7 @@ public final class InjectionCheck extends AbstractActiveCheck {
                         "shell commands, or response markup.")
                 .background(background)
                 .severity(severity)
-                .confidence("Firm")
+                .confidence(confidence)
                 .evidence(base, evidence)
                 .build();
     }
@@ -211,8 +249,30 @@ public final class InjectionCheck extends AbstractActiveCheck {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
+    /** Verdict returned from an evidence-aware trigger (used by NoSQL). */
+    private record Verdict(String severity, String confidence, String detail) {}
+
     @FunctionalInterface
-    private interface FindingBuilder {
-        AuditIssue build(HttpRequestResponse base, HttpRequestResponse evidence, String payload);
+    private interface SeverityTrigger {
+        /** Returns the severity to fire at, or null if the response doesn't trigger. */
+        String severityFor(HttpResponse response, String payload);
+    }
+
+    @FunctionalInterface
+    private interface SeverityFindingBuilder {
+        AuditIssue build(HttpRequestResponse base, HttpRequestResponse evidence,
+                         String payload, String severity);
+    }
+
+    @FunctionalInterface
+    private interface EvidenceTrigger {
+        /** Returns the verdict to fire, or null if the response doesn't trigger. */
+        Verdict verdictFor(HttpResponse response, String payload);
+    }
+
+    @FunctionalInterface
+    private interface EvidenceFindingBuilder {
+        AuditIssue build(HttpRequestResponse base, HttpRequestResponse evidence,
+                         String payload, Verdict verdict);
     }
 }
