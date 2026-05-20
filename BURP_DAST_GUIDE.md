@@ -64,7 +64,7 @@ extension fault.
 | **API7:2023** — Server-Side Request Forgery | Active | URL-like parameter mutation with internal / cloud-IMDS / file:// payloads. |
 | **API8:2023** — Security Misconfiguration | Active + Passive | Missing security headers; version-disclosure regex on `Server`, `X-Powered-By` etc.; CORS misconfig; verbose error leakage; SQL / NoSQL / Command / XSS injection. |
 | **API9:2023** — Improper Inventory Management | Active + Passive | Path-keyword detection; active probe of older `/v(N-1)/` paths. |
-| **API10:2023** — Unsafe Consumption of APIs | Passive | Webhook-endpoint detection. |
+| **API10:2023** — Unsafe Consumption of APIs | Active + Passive | Webhook-endpoint detection (passive); HTTP Parameter Pollution probe across URL and body-form parameters (active). |
 
 All findings use Montoya's four-level severity (`HIGH`, `MEDIUM`, `LOW`,
 `INFORMATION`). Legacy `Critical` findings are reported as `HIGH` with

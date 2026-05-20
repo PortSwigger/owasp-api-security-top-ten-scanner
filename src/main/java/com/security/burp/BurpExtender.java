@@ -15,6 +15,7 @@ import com.security.burp.checks.active.FunctionLevelAuthCheck;
 import com.security.burp.checks.active.InjectionCheck;
 import com.security.burp.checks.active.MassAssignmentCheck;
 import com.security.burp.checks.active.MethodFuzzingCheck;
+import com.security.burp.checks.active.ParameterPollutionCheck;
 import com.security.burp.checks.active.SsrfCheck;
 import com.security.burp.checks.passive.BusinessFlowCheck;
 import com.security.burp.checks.passive.ExcessiveDataExposureCheck;
@@ -93,6 +94,8 @@ public final class BurpExtender implements BurpExtension {
                 new SsrfCheck(api),                               ScanCheckType.PER_INSERTION_POINT);
         api.scanner().registerActiveScanCheck(
                 new MassAssignmentCheck(api, fieldDiscovery),     ScanCheckType.PER_INSERTION_POINT);
+        api.scanner().registerActiveScanCheck(
+                new ParameterPollutionCheck(api),                 ScanCheckType.PER_INSERTION_POINT);
         // PER_HOST — checks that operate on endpoints/methods rather than parameters.
         api.scanner().registerActiveScanCheck(
                 new MethodFuzzingCheck(api),                      ScanCheckType.PER_HOST);

@@ -45,7 +45,7 @@ AI features: enabled
 | API7:2023 — Server-Side Request Forgery | Active |
 | API8:2023 — Security Misconfiguration | Active + passive |
 | API9:2023 — Improper Inventory Management | Active + passive |
-| API10:2023 — Unsafe Consumption of APIs | Passive |
+| API10:2023 — Unsafe Consumption of APIs | Active + Passive |
 
 See [BURP_DAST_GUIDE.md](BURP_DAST_GUIDE.md) for the per-category
 detail and the coverage table with notes.
@@ -110,9 +110,8 @@ The patterns established during the v2 rewrite are documented in
 
 Ideas worth picking up:
 - GraphQL-specific testing (introspection, depth, batching)
-- Parameter pollution / path-traversal probes (flagged in earlier
-  review as a follow-up to API10)
 - Out-of-band detection via Burp Collaborator integration
+- Path-traversal probes on URL-like parameters (counterpart to SSRF)
 
 ## Disclaimer
 

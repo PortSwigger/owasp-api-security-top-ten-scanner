@@ -244,6 +244,34 @@ string and stores it verbatim; no Mongo query is involved.
   actions?
 - Is access restricted by network controls (mTLS, allow-list)?
 
+### API10:2023 — HTTP Parameter Pollution
+
+**Finding:** sending the same parameter twice (once with the original
+value, once with a marker) produced a response that differs from the
+single-parameter baseline.
+
+**How to validate:**
+- Reproduce the request in Repeater with the polluted parameter.
+- Try several pollution-value variants: empty string, a value the
+  application is likely to treat specially (`admin`, `1`, `0`,
+  `true`), and the marker the scanner used. Different frameworks
+  pick different values from the duplicate set — knowing *which* the
+  server picks is part of the exploit.
+- If the parameter participates in authorisation (e.g.
+  `?user_id=123&user_id=456` returns user 456's data), this is a
+  direct access-control bypass.
+- If the parameter participates in filtering (e.g. WAF reads first
+  value, app reads last), the inconsistency is exploitable across
+  the security boundary.
+
+**False positive scenarios:** the framework rejects duplicates with a
+4xx (still a behavioural difference, but not exploitable); the
+response varies for other reasons (timestamps, caching).
+
+**True positive indicators:** the polluted response reveals different
+data than the baseline; the security control (WAF, framework router)
+treats the parameter set differently than the application code.
+
 ### API10:2023 — Webhook endpoint without signature verification
 
 **Finding:** path matches a webhook pattern (`/webhook`, `/callback`,
