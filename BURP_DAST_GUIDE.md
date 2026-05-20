@@ -1,371 +1,127 @@
-# Burp Suite DAST (DAST) Integration Guide
+# Burp Suite DAST Integration Guide
 
-## 🎯 Overview
+This document only covers what's specific to running this extension on
+**Burp Suite DAST** (headless / automated scanning). For general DAST
+configuration — scope, scheduling, scan-speed tuning, OpenAPI import,
+CI/CD integration — see the [official DAST documentation](https://portswigger.net/burp/documentation/dast).
 
-This extension is **fully compatible** with both:
-- ✅ **Burp Suite Professional** (Interactive scanning with UI)
-- ✅ **Burp Suite DAST** (Automated/headless DAST scanning)
+The extension also runs unchanged in **Burp Suite Professional**; the
+edition is detected at load time and the UI tab is skipped under DAST.
 
-The extension automatically detects the environment and adjusts accordingly.
+## Loading the extension
 
----
+The extension is shipped as a single fat JAR. Build with:
 
-## 📦 Extension File
-
-**Location:**
-```
-/Users/rob.cornes/claude/burp-api-scanner/target/burp-api-scanner-1.0.0-jar-with-dependencies.jar
-```
-
----
-
-## 🚀 Installation in Burp Suite DAST
-
-### Method 1: Via Web UI (Recommended)
-
-1. **Log in to Burp Suite DAST**
-   - Navigate to your Burp Suite DAST web interface
-   - Go to **Settings** → **Extensions**
-
-2. **Upload Extension**
-   - Click **Add extension**
-   - Select file: `burp-api-scanner-1.0.0-jar-with-dependencies.jar`
-   - Click **Upload**
-
-3. **Enable Extension**
-   - Find "Advanced API Security Scanner" in the list
-   - Toggle **Enabled** to ON
-   - Save changes
-
-### Method 2: Via Configuration File
-
-If managing extensions via configuration:
-
-```yaml
-extensions:
-  - name: "Advanced API Security Scanner"
-    path: "/path/to/burp-api-scanner-1.0.0-jar-with-dependencies.jar"
-    enabled: true
-```
-
----
-
-## 🔧 Scan Configuration
-
-### Creating a Scan with the Extension
-
-1. **Create New Scan**
-   - Go to **Scans** → **New scan**
-   - Enter your API base URL
-
-2. **Configure Scan Settings**
-   - **Scan Type:** Active and Passive
-   - **Extensions:** Ensure "Advanced API Security Scanner" is enabled
-   - **Scan Speed:** Normal or Thorough (recommended for APIs)
-
-3. **Optional: Import OpenAPI/Swagger**
-   - Upload your API specification
-   - Extension will automatically test all endpoints
-
----
-
-## 🎯 What Gets Scanned
-
-### Automatic Detection
-
-The extension automatically identifies API endpoints based on:
-- URLs containing `/api/`
-- Versioned paths (`/v1/`, `/v2/`, etc.)
-- JSON content types
-- GraphQL endpoints
-
-### Coverage
-
-| OWASP Category | Detection | Notes |
-|----------------|-----------|-------|
-| **API1:2023** - BOLA | ✅ Active + Passive | ID manipulation, enumeration |
-| **API2:2023** - Authentication | ✅ Active + Passive | JWT testing, weak auth |
-| **API3:2023** - Property Authorization | ✅ Active + Passive | Data exposure, mass assignment |
-| **API4:2023** - Resource Consumption | ⚠️ Passive | Rate limiting checks |
-| **API5:2023** - Function Authorization | ✅ Active | HTTP method fuzzing |
-| **API6:2023** - Business Flows | ⚠️ Passive | Anti-automation checks |
-| **API7:2023** - SSRF | ✅ Active | Internal network access |
-| **API8:2023** - Misconfiguration | ✅ Active + Passive | Headers, CORS, injections |
-| **API9:2023** - Inventory Management | ⚠️ Passive | Deprecated versions, debug endpoints |
-| **API10:2023** - API Consumption | ⚠️ Passive | Webhook validation |
-
----
-
-## 📊 Viewing Results
-
-### In Burp Suite DAST Dashboard
-
-1. **Navigate to Scan Results**
-   - Select your completed scan
-   - Go to **Issues** tab
-
-2. **Filter by Extension**
-   - Issues will be prefixed with OWASP ID
-   - Example: `API1:2023 - Broken Object Level Authorization`
-
-3. **Issue Details Include:**
-   - **Severity:** Critical/High/Medium/Low/Information
-   - **Confidence:** Certain/Firm/Tentative
-   - **Description:** OWASP 2023 official description
-   - **Proof of Concept:** Request/Response demonstrating the vulnerability
-   - **Remediation:** Specific fix recommendations
-
-### Sample Issue Output
-
-```
-Issue: API1:2023 - Broken Object Level Authorization
-Severity: High
-Confidence: Firm
-
-Background:
-APIs tend to expose endpoints that handle object identifiers, creating a wide
-attack surface of Object Level Access Control issues. Object level authorization
-checks should be considered in every function that accesses a data source using
-an ID from the user.
-
-Details:
-The API endpoint is vulnerable to BOLA. Unauthorized access to user resources
-was achieved by manipulating object IDs.
-
-Original URL: https://api.example.com/users/123
-Modified URL: https://api.example.com/users/456
-
-Impact:
-- Unauthorized data access
-- Privacy violation
-- Potential data breach
-
-Recommendation:
-Implement proper authorization checks that verify the authenticated user has
-permission to access the requested resource.
-```
-
----
-
-## ⚙️ Advanced Configuration
-
-### Scan Performance Tuning
-
-For large APIs, consider:
-
-1. **Increase Thread Count**
-   - DAST settings → Performance
-   - Set higher thread count for faster scans
-
-2. **Adjust Timeouts**
-   - Increase request timeout for slow APIs
-   - Default: 30 seconds
-
-3. **Scope Configuration**
-   - Use scope rules to focus on API endpoints
-   - Exclude static assets
-
-### Example Scope Configuration
-
-```
-Include:
-  - https://api.example.com/*
-  - https://example.com/api/*
-  - https://example.com/v1/*
-  - https://example.com/v2/*
-
-Exclude:
-  - *.css
-  - *.js
-  - *.png
-  - *.jpg
-  - /static/*
-  - /assets/*
-```
-
----
-
-## 🔍 Testing Specific Vulnerabilities
-
-### Focus on Specific OWASP Categories
-
-The extension runs all checks by default, but you can analyze results by category:
-
-**Critical Issues (Immediate Action Required):**
-- API1:2023 - BOLA
-- API2:2023 - JWT 'none' algorithm
-- API8:2023 - SQL/Command Injection
-- API7:2023 - SSRF with metadata access
-
-**High Priority:**
-- API5:2023 - Dangerous HTTP methods (PUT/DELETE)
-- API3:2023 - Mass assignment privilege escalation
-- API8:2023 - API over HTTP
-
-**Medium Priority:**
-- API2:2023 - Long-lived JWT tokens
-- API4:2023 - Missing rate limiting
-- API8:2023 - Missing security headers
-
----
-
-## 📈 Integration with CI/CD
-
-### Automated Scanning Pipeline
-
-1. **Trigger Scans via API**
 ```bash
-curl -X POST https://dast.burp.example.com/api/v1/scans \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "API Security Scan",
-    "urls": ["https://api.example.com"],
-    "scan_configuration_ids": ["your-config-id"],
-    "extensions": ["Advanced API Security Scanner"]
-  }'
+mvn clean package -DskipTests
 ```
 
-2. **Monitor Scan Progress**
-```bash
-curl https://dast.burp.example.com/api/v1/scans/{scan_id} \
-  -H "Authorization: Bearer YOUR_API_KEY"
-```
+Output: `target/burp-api-scanner-2.0.0.jar`.
 
-3. **Retrieve Results**
-```bash
-curl https://dast.burp.example.com/api/v1/scans/{scan_id}/issues \
-  -H "Authorization: Bearer YOUR_API_KEY"
-```
+In DAST:
 
----
+1. **Settings → Extensions → Add extension**
+2. Upload `burp-api-scanner-2.0.0.jar`
+3. Enable the extension
 
-## 🐛 Troubleshooting
+There is no per-DAST configuration — once loaded and enabled, the
+extension's checks run as part of any scan that uses Active and/or
+Passive audit.
 
-### Extension Not Loading
+## Verifying the load
 
-**Check Extension Logs:**
-1. Go to Burp Suite DAST → Settings → Extensions
-2. View extension details
-3. Check load status and error messages
+The extension banner appears in the extension's output stream. On a
+healthy load it reads:
 
-**Expected Load Message:**
 ```
 ====================================
-Advanced API Security Scanner v1.0.0
-OWASP API Security Top 10 2023
-Compatible with Burp Suite Professional & Burp Suite DAST
-====================================
-Extension loaded successfully!
+Advanced API Security Scanner v2.0.0
+OWASP API Security Top 10 (2023) coverage
 Edition: Burp Suite DAST
+AI features: enabled       (or "disabled" if Burp AI is off)
+====================================
 ```
 
-### No Issues Detected
+The `Edition:` line uses `BurpSuiteEdition.displayName()`, so the value
+matches the running product exactly (`Burp Suite DAST`,
+`Burp Suite Professional`, or `Burp Suite Community`).
 
-**Verify:**
-1. ✅ Extension is enabled
-2. ✅ Scan includes both Active and Passive checks
-3. ✅ Target URLs are in scope
-4. ✅ API endpoints are being scanned (check scan log)
+The `AI features:` line reports whether `api.ai().isEnabled()` returned
+true. If it says `disabled` when you expect AI to be on, the most
+common cause is that Burp AI isn't enabled at the suite level — not an
+extension fault.
 
-**Common Causes:**
-- Scan only ran passive checks (enable active scanning)
-- Scope too restrictive
-- API requires authentication (provide credentials in scan config)
+## OWASP API Top 10 coverage
 
-### Issues Not Appearing
+| Category | Detection | Notes |
+|---|---|---|
+| **API1:2023** — Broken Object Level Authorization | Active + Passive | ID manipulation, sequential enumeration, unauthenticated access. |
+| **API2:2023** — Broken Authentication | Active + Passive | JWT `alg:none`, weak symmetric algs, missing/long `exp`. SQL-injection auth bypass on login endpoints. |
+| **API3:2023** — Broken Object Property Level Authorization | Active + Passive | Mass-assignment (hardcoded list + AI-suggested contextual fields when Burp AI is enabled). Sensitive-data exposure in JSON responses. |
+| **API4:2023** — Unrestricted Resource Consumption | Passive | Large-response detection, missing rate-limit headers on resource-intensive paths. |
+| **API5:2023** — Broken Function Level Authorization | Active | Privilege checks via header stripping / role downgrade. Cross-Site Tracing (TRACE) detection. |
+| **API6:2023** — Unrestricted Access to Sensitive Business Flows | Passive | Sensitive-path keyword detection + anti-automation header check. |
+| **API7:2023** — Server-Side Request Forgery | Active | URL-like parameter mutation with internal / cloud-IMDS / file:// payloads. |
+| **API8:2023** — Security Misconfiguration | Active + Passive | Missing security headers; version-disclosure regex on `Server`, `X-Powered-By` etc.; CORS misconfig; verbose error leakage; SQL / NoSQL / Command / XSS injection. |
+| **API9:2023** — Improper Inventory Management | Active + Passive | Path-keyword detection; active probe of older `/v(N-1)/` paths. |
+| **API10:2023** — Unsafe Consumption of APIs | Passive | Webhook-endpoint detection. |
 
-**Check Issue Filters:**
-- Ensure filters include all severity levels
-- Check if issues are being consolidated
-- Verify scan completed successfully
+All findings use Montoya's four-level severity (`HIGH`, `MEDIUM`, `LOW`,
+`INFORMATION`). Legacy `Critical` findings are reported as `HIGH` with
+`CERTAIN` confidence — Montoya has no Critical level.
 
----
+## Burp AI features
 
-## 📚 Additional Resources
+Two AI integrations run automatically when `api.ai().isEnabled()` is
+true:
 
-### Burp Suite DAST Documentation
-- [Burp Suite DAST documentation hub](https://portswigger.net/burp/documentation/dast)
-- [DAST setup guides](https://portswigger.net/burp/documentation/dast/setup)
-- [Extension authoring](https://portswigger.net/burp/documentation/desktop/extend-burp/extensions/index.html)
+- **Passive triage** — each passive finding is sent to the model with
+  the request/response context. The model returns `KEEP` or
+  `SUPPRESS`. Findings tagged `SUPPRESS` are dropped before they reach
+  the Issues tab. Conservative: any failure or ambiguous reply keeps
+  the issue.
+- **Contextual mass-assignment field discovery** — for JSON request
+  bodies, the model proposes domain-specific privileged fields
+  (`priceOverride`, `organizationRole`, etc.) in addition to the
+  hardcoded list, and the existing test logic injects each one.
 
-### OWASP API Security
-- [OWASP API Security Top 10 2023](https://owasp.org/www-project-api-security/)
-- [API Security Checklist](https://github.com/owasp/api-security)
+Each AI call has a 10-second hard timeout. AI errors are logged but
+never fail a scan.
 
----
+Kill switches (JVM system properties on the DAST process):
 
-## 🔄 Updating the Extension
+- `-Dcom.security.burp.ai.disabled=true` — turn off everything
+- `-Dcom.security.burp.ai.triage.disabled=true` — keep field discovery,
+  disable triage
+- `-Dcom.security.burp.ai.discovery.disabled=true` — keep triage,
+  disable field discovery
 
-To update to a newer version:
-
-1. Build new JAR with latest code
-2. Upload to Burp Suite DAST
-3. Old version will be automatically replaced
-4. Restart active scans to use new version
-
----
-
-## 💡 Best Practices
-
-### For Accurate Results
-
-1. **Provide Authentication**
-   - Configure valid credentials in scan settings
-   - Extension needs authenticated access to test authorization issues
-
-2. **Import API Specifications**
-   - Upload OpenAPI/Swagger files
-   - Helps extension understand API structure
-
-3. **Run Thorough Scans**
-   - Use "Thorough" scan speed for comprehensive coverage
-   - Allow sufficient time for active testing
-
-4. **Review All Severities**
-   - Don't ignore Information/Low severity issues
-   - They often indicate broader security problems
-
-### For Development Teams
-
-1. **Integrate Early**
-   - Run scans on every API deployment
-   - Catch issues before production
-
-2. **Set Thresholds**
-   - Block deployments if Critical/High issues found
-   - Create tickets for Medium severity issues
-
-3. **Track Progress**
-   - Monitor issue trends over time
-   - Measure security improvement
-
----
-
-## 📞 Support
-
-For issues specific to:
-- **Extension:** Check GitHub issues
-- **Burp Suite DAST:** Contact PortSwigger support
-- **OWASP Standards:** Refer to OWASP documentation
-
----
-
-## ✅ Verification Checklist
+## Verification checklist
 
 Before running production scans:
 
-- [ ] Extension loaded successfully in Burp Suite DAST
-- [ ] Scan configuration includes Active + Passive checks
-- [ ] API endpoints are in scope
-- [ ] Authentication credentials configured (if required)
-- [ ] Test scan completed successfully
-- [ ] Issues appearing with OWASP 2023 naming format
-- [ ] Issue severity and confidence levels appropriate
-- [ ] Results exported and reviewed by security team
+- [ ] Extension JAR loaded and enabled in Settings → Extensions
+- [ ] Banner shows `v2.0.0`, the correct `Edition:`, and the expected
+      `AI features:` state
+- [ ] Scan configuration includes Active + Passive audit (passive-only
+      will not surface any API5/API7 findings)
+- [ ] API endpoints are in scan scope
+- [ ] Authentication credentials configured if the API requires them
+      (authorization checks need an authenticated baseline to test
+      against)
 
----
+## Troubleshooting
 
-**Version:** 1.0.0
-**Last Updated:** 2025-11-26
-**Compatibility:** Burp Suite DAST 2023.x and later
+| Symptom | First thing to check |
+|---|---|
+| Extension fails to load | Errors tab on the extension. JDK 17+ is required (Montoya API requirement). |
+| `AI features: disabled` when Burp AI is on | The extension declares `EnhancedCapability.AI_FEATURES`; if `isEnabled()` is still false, confirm the user account has been granted AI access. |
+| No findings at all | Confirm Active audit is enabled — most high-severity findings (BOLA, injection, mass assignment, SSRF) require it. |
+| Findings missing only on URL-rebuild checks (BOLA, version probe) | Some servers reject duplicate Host headers — this is handled in v2, but worth checking the Errors tab for `4xx` responses on probe requests. |
+
+## Reference
+
+- [Burp Suite DAST documentation](https://portswigger.net/burp/documentation/dast)
+- [Extension authoring](https://portswigger.net/burp/documentation/desktop/extend-burp/extensions/index.html)
+- [CLAUDE.md](CLAUDE.md) — architecture, conventions, gotchas
+- [README.md](README.md) — overview and quick-start
