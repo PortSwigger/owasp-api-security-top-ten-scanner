@@ -140,8 +140,8 @@ public final class AuthBypassTester {
                                         String field,
                                         String payload) {
         String detail =
-                "Sending the SQL payload <code>" + escape(payload) + "</code> in the " +
-                "<code>" + field + "</code> field returned a 200 response containing tokens / " +
+                "Sending the SQL payload <code>" + IssueBuilder.escapeHtml(payload) + "</code> in the " +
+                "<code>" + IssueBuilder.escapeHtml(field) + "</code> field returned a 200 response containing tokens / " +
                 "success markers. This is consistent with a SQL-injection authentication bypass.";
         return IssueBuilder.issue(base)
                 .name("API2:2023 - Broken Authentication (SQL Injection Auth Bypass)")
@@ -159,7 +159,8 @@ public final class AuthBypassTester {
                                           String field,
                                           String payload) {
         String detail =
-                "The SQL payload <code>" + escape(payload) + "</code> in <code>" + field +
+                "The SQL payload <code>" + IssueBuilder.escapeHtml(payload) + "</code> in <code>" +
+                IssueBuilder.escapeHtml(field) +
                 "</code> caused the server to return a SQL-engine error message. The error " +
                 "leak is itself a finding and strongly indicates an injectable code path.";
         return IssueBuilder.issue(base)
@@ -174,7 +175,4 @@ public final class AuthBypassTester {
                 .build();
     }
 
-    private static String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-    }
 }

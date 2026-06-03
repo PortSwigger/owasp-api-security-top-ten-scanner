@@ -126,7 +126,7 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
             String value = header.value();
             if (value == null) continue;
             if (pattern.valueMatch().matcher(value).matches()) {
-                found.add(header.name() + ": " + value);
+                found.add(IssueBuilder.escapeHtml(header.name() + ": " + value));
             }
         }
         if (!found.isEmpty()) sink.add(buildDisclosureHeadersIssue(rr, found));
@@ -267,7 +267,7 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
                 .name("API8:2023 - Security Misconfiguration (CORS Reflected Origin)")
                 .detail("The server reflects the request <code>Origin</code> header back into " +
                         "<code>Access-Control-Allow-Origin</code> without validation. " +
-                        "Origin sent: <code>" + origin + "</code>.<br><br>" +
+                        "Origin sent: <code>" + IssueBuilder.escapeHtml(origin) + "</code>.<br><br>" +
                         "Combined with credentials, this allows full cross-origin attack against " +
                         "authenticated sessions.")
                 .remediation("Validate the request origin against an allow-list before reflecting.")

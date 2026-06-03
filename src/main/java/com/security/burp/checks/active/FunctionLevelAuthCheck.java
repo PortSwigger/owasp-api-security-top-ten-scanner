@@ -163,8 +163,8 @@ public final class FunctionLevelAuthCheck extends AbstractActiveCheck {
         String detail =
                 "A privileged endpoint returned a 2xx response under the test condition: " +
                 "<b>" + condition + "</b>.<br><br>" +
-                "Endpoint: <code>" + evidence.request().method() + " " +
-                evidence.request().pathWithoutQuery() + "</code><br><br>" +
+                "Endpoint: <code>" + IssueBuilder.escapeHtml(evidence.request().method()) + " " +
+                IssueBuilder.escapeHtml(evidence.request().pathWithoutQuery()) + "</code><br><br>" +
                 "Privileged endpoints (admin paths, destructive verbs) must enforce role " +
                 "checks server-side on every invocation.";
         String remediation =

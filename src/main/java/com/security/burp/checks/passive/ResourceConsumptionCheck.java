@@ -112,7 +112,7 @@ public final class ResourceConsumptionCheck extends AbstractPassiveCheck {
     }
 
     private AuditIssue buildMissingRateLimitIssue(HttpRequestResponse rr) {
-        String path = rr.request().pathWithoutQuery();
+        String path = IssueBuilder.escapeHtml(rr.request().pathWithoutQuery());
         String detail =
                 "Endpoint <code>" + path + "</code> performs resource-intensive work but the " +
                 "response carries no rate-limit headers (X-RateLimit-*, RateLimit-*).<br><br>" +

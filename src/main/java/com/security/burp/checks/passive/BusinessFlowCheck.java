@@ -110,7 +110,7 @@ public final class BusinessFlowCheck extends AbstractPassiveCheck {
 
     private AuditIssue buildIssue(HttpRequestResponse rr) {
         String detail =
-                "The endpoint <code>" + rr.request().pathWithoutQuery() + "</code> appears " +
+                "The endpoint <code>" + IssueBuilder.escapeHtml(rr.request().pathWithoutQuery()) + "</code> appears " +
                 "to expose a sensitive business flow but the response shows no obvious " +
                 "anti-automation control (no rate-limit headers, no CAPTCHA challenge, " +
                 "no Retry-After).<br><br>" +

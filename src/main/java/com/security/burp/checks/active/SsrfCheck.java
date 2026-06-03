@@ -119,9 +119,9 @@ public final class SsrfCheck extends AbstractActiveCheck {
                                   AuditInsertionPoint ip,
                                   Payload payload) {
         String detail =
-                "Parameter <code>" + ip.name() + "</code> appears vulnerable to SSRF. " +
-                "Submitting <code>" + escapeHtml(payload.value) + "</code> caused the " +
-                "response to contain the marker <code>" + escapeHtml(payload.marker) + "</code>, " +
+                "Parameter <code>" + IssueBuilder.escapeHtml(ip.name()) + "</code> appears vulnerable to SSRF. " +
+                "Submitting <code>" + IssueBuilder.escapeHtml(payload.value) + "</code> caused the " +
+                "response to contain the marker <code>" + IssueBuilder.escapeHtml(payload.marker) + "</code>, " +
                 "indicating the server fetched the attacker-controlled URL.<br><br>" +
                 "<b>Why this matters:</b> SSRF can be escalated to read cloud-instance metadata, " +
                 "scan internal networks, or exfiltrate files (<code>file://</code> scheme).";
@@ -135,14 +135,6 @@ public final class SsrfCheck extends AbstractActiveCheck {
                 .confidence("Firm")
                 .evidence(base, evidence)
                 .build();
-    }
-
-    private static String escapeHtml(String s) {
-        if (s == null) return "";
-        return s.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
     }
 
     // ---- Payload record ----------------------------------------------------

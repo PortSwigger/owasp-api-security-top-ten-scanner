@@ -130,7 +130,7 @@ public final class InjectionCheck extends AbstractActiveCheck {
             if (evidence.response().statusCode() == 200 && payload.contains("$ne")) {
                 findings.add(buildNoSqlIssue(rr, evidence, ip, payload, "Tentative",
                         "Endpoint returned 200 OK to a Mongo operator payload " +
-                        "(<code>" + escape(payload) + "</code>). The application appears " +
+                        "(<code>" + IssueBuilder.escapeHtml(payload) + "</code>). The application appears " +
                         "to accept the operator object without an error — consistent with " +
                         "a missing input-shape check that may permit authentication or " +
                         "filter bypass."));
@@ -233,8 +233,8 @@ public final class InjectionCheck extends AbstractActiveCheck {
                                   String background) {
         String detail =
                 summary + "<br><br>" +
-                "Insertion point: <code>" + ip.name() + "</code><br>" +
-                "Payload: <code>" + escape(payload) + "</code>";
+                "Insertion point: <code>" + IssueBuilder.escapeHtml(ip.name()) + "</code><br>" +
+                "Payload: <code>" + IssueBuilder.escapeHtml(payload) + "</code>";
         return IssueBuilder.issue(base)
                 .name(name)
                 .detail(detail)
@@ -246,10 +246,6 @@ public final class InjectionCheck extends AbstractActiveCheck {
                 .confidence(confidence)
                 .evidence(base, evidence)
                 .build();
-    }
-
-    private static String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     @FunctionalInterface

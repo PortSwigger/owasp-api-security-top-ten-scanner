@@ -131,11 +131,11 @@ public final class DeprecatedVersionProbeCheck extends AbstractActiveCheck {
                                   int currentVersion,
                                   int olderVersion) {
         String detail =
-                "Endpoint <code>" + base.request().pathWithoutQuery() + "</code> belongs to " +
+                "Endpoint <code>" + IssueBuilder.escapeHtml(base.request().pathWithoutQuery()) + "</code> belongs to " +
                 "API <code>v" + currentVersion + "</code>. The same endpoint at API " +
                 "<code>v" + olderVersion + "</code> also returned a 2xx response — meaning " +
                 "an older version of the API surface is still reachable on this host.<br><br>" +
-                "Probed path: <code>" + evidence.request().pathWithoutQuery() + "</code>";
+                "Probed path: <code>" + IssueBuilder.escapeHtml(evidence.request().pathWithoutQuery()) + "</code>";
         String remediation =
                 "Either remove the older version from production, redirect it to the current " +
                 "version, or restrict access (mTLS, allow-list).";

@@ -103,8 +103,9 @@ public final class InventoryManagementCheck extends AbstractPassiveCheck {
     // ---- Issues ------------------------------------------------------------
 
     private AuditIssue buildDeprecatedVersionIssue(HttpRequestResponse rr, String path) {
+        String safePath = IssueBuilder.escapeHtml(path);
         String detail =
-                "Endpoint <code>" + path + "</code> appears to use a deprecated or legacy API " +
+                "Endpoint <code>" + safePath + "</code> appears to use a deprecated or legacy API " +
                 "version. Old versions often miss security fixes that have been applied to the " +
                 "current version.";
         String remediation =
@@ -121,8 +122,9 @@ public final class InventoryManagementCheck extends AbstractPassiveCheck {
     }
 
     private AuditIssue buildDebugEndpointIssue(HttpRequestResponse rr, String path) {
+        String safePath = IssueBuilder.escapeHtml(path);
         String detail =
-                "Endpoint <code>" + path + "</code> looks like a debug, internal, or management " +
+                "Endpoint <code>" + safePath + "</code> looks like a debug, internal, or management " +
                 "endpoint. If reachable in production this can leak runtime configuration, " +
                 "metrics, or grant administrative actions.";
         String remediation =
@@ -140,7 +142,8 @@ public final class InventoryManagementCheck extends AbstractPassiveCheck {
 
     private AuditIssue buildVersionDisclosureIssue(HttpRequestResponse rr, String version) {
         String detail =
-                "The response advertises an API version in a header: <code>" + version +
+                "The response advertises an API version in a header: <code>" +
+                IssueBuilder.escapeHtml(version) +
                 "</code>. Not directly exploitable, but it shortens an attacker's recon path.";
         String remediation =
                 "Drop the version header from outbound responses or restrict it to trusted " +

@@ -82,6 +82,23 @@ public final class IssueBuilder {
                 List.of(requests));
     }
 
+    /**
+     * HTML-escape a string before interpolating it into an issue detail
+     * (Burp's scanner panel renders {@code detail} as HTML). Use this for
+     * EVERY HTTP-derived value embedded in detail strings — URL paths,
+     * insertion-point names, header values, JWT fields, etc. The Swing
+     * renderer doesn't execute JavaScript, but unescaped markup still
+     * enables visual manipulation and link injection in the issues panel.
+     */
+    public static String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
     private static AuditIssueSeverity severityFromString(String s) {
         if (s == null) return AuditIssueSeverity.INFORMATION;
         return switch (s.toLowerCase()) {

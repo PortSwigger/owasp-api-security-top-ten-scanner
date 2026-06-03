@@ -35,7 +35,12 @@ import java.util.concurrent.TimeoutException;
 public final class AiClient {
 
     private static final int CACHE_LIMIT = 1024;
-    private static final long DEFAULT_TIMEOUT_SECONDS = 10;
+    /**
+     * Hard timeout per prompt. Kept tight (2s) because scan-check callers
+     * block on this — long timeouts can saturate Burp's scan-thread pool
+     * under high-volume scans (Zak / automated review feedback).
+     */
+    private static final long DEFAULT_TIMEOUT_SECONDS = 2;
     private static final double DETERMINISTIC_TEMPERATURE = 0.0;
 
     private final MontoyaApi api;

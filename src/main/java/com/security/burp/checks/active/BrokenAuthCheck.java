@@ -193,7 +193,7 @@ public final class BrokenAuthCheck extends AbstractActiveCheck {
                 "The request carries a JWT whose <code>alg</code> header is <code>none</code>. " +
                 "Servers that accept this can be coerced into trusting unsigned tokens — an " +
                 "attacker can forge any identity.<br><br>" +
-                "Token (truncated): <code>" + snippet + "</code>";
+                "Token (truncated): <code>" + IssueBuilder.escapeHtml(snippet) + "</code>";
         return IssueBuilder.issue(rr)
                 .name("API2:2023 - Broken Authentication (JWT 'none' Algorithm)")
                 .detail(detail)
@@ -206,12 +206,13 @@ public final class BrokenAuthCheck extends AbstractActiveCheck {
     }
 
     private AuditIssue buildWeakAlgIssue(HttpRequestResponse rr, String alg) {
+        String escapedAlg = IssueBuilder.escapeHtml(alg);
         String detail =
-                "The JWT uses a symmetric HMAC algorithm (<code>" + alg + "</code>). HMAC " +
+                "The JWT uses a symmetric HMAC algorithm (<code>" + escapedAlg + "</code>). HMAC " +
                 "secrets are necessarily shared between issuer and verifier; any service that " +
                 "verifies tokens can also forge them.";
         return IssueBuilder.issue(rr)
-                .name("API2:2023 - Broken Authentication (Weak JWT Algorithm: " + alg + ")")
+                .name("API2:2023 - Broken Authentication (Weak JWT Algorithm: " + escapedAlg + ")")
                 .detail(detail)
                 .remediation("Prefer asymmetric algorithms (RS256, ES256) so verifiers cannot " +
                         "mint new tokens.")

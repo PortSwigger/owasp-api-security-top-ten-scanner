@@ -65,7 +65,7 @@ public final class UnsafeApiConsumptionCheck extends AbstractPassiveCheck {
     }
 
     private AuditIssue buildWebhookIssue(HttpRequestResponse rr) {
-        String path = rr.request().pathWithoutQuery();
+        String path = IssueBuilder.escapeHtml(rr.request().pathWithoutQuery());
         String detail =
                 "Endpoint <code>" + path + "</code> appears to be a webhook receiver. " +
                 "Webhook handlers commonly skip signature verification, schema validation, " +

@@ -167,16 +167,17 @@ public final class ParameterPollutionCheck extends AbstractActiveCheck {
         int origLen = lengthOrZero(base.response());
         int pollLen = lengthOrZero(polluted.response());
 
+        String safeName = IssueBuilder.escapeHtml(ip.name());
         String detail =
-                "Sending a duplicate of the <code>" + ip.name() + "</code> parameter " +
-                "(<code>" + escape(POLLUTION_MARKER) + "</code>) produced a response that " +
+                "Sending a duplicate of the <code>" + safeName + "</code> parameter " +
+                "(<code>" + IssueBuilder.escapeHtml(POLLUTION_MARKER) + "</code>) produced a response that " +
                 "differs from the baseline:<br><br>" +
                 "<table border=\"0\" cellpadding=\"4\">" +
                 "<tr><td><b>&nbsp;</b></td><td><b>Status</b></td><td><b>Body length</b></td></tr>" +
                 "<tr><td>Baseline</td><td>" + origStatus + "</td><td>" + origLen + "</td></tr>" +
                 "<tr><td>Polluted</td><td>" + pollStatus + "</td><td>" + pollLen + "</td></tr>" +
                 "</table><br>" +
-                "The server reads the two values for <code>" + ip.name() + "</code> differently. " +
+                "The server reads the two values for <code>" + safeName + "</code> differently. " +
                 "If the parameter participates in authorization, filtering, or business logic, " +
                 "an attacker who can pollute the parameter at the right layer may be able to " +
                 "override the trusted value.";
@@ -196,7 +197,4 @@ public final class ParameterPollutionCheck extends AbstractActiveCheck {
                 .build();
     }
 
-    private static String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-    }
 }

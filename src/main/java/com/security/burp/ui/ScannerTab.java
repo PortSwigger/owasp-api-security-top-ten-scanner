@@ -7,12 +7,11 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
-import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.table.AbstractTableModel;
 import java.awt.BorderLayout;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 
@@ -66,11 +65,33 @@ public final class ScannerTab {
         return root;
     }
 
+    /**
+     * Snapshot + sort runs on a SwingWorker background thread (the registry
+     * can hold up to 10,000 entries). Only the lightweight model swap and
+     * the status-label update touch the EDT. Avoids the multi-millisecond
+     * EDT freeze the automated review flagged.
+     */
     private void refresh() {
-        SwingUtilities.invokeLater(() -> {
-            model.update(registry.snapshot());
-            statusLabel.setText(model.getRowCount() + " endpoints discovered");
-        });
+        new SwingWorker<List<EndpointRegistry.ApiEndpoint>, Void>() {
+            @Override
+            protected List<EndpointRegistry.ApiEndpoint> doInBackground() {
+                List<EndpointRegistry.ApiEndpoint> sorted = new ArrayList<>(registry.snapshot());
+                sorted.sort(Comparator.comparing(EndpointRegistry.ApiEndpoint::host)
+                        .thenComparing(EndpointRegistry.ApiEndpoint::path));
+                return sorted;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    model.setRows(get());
+                    statusLabel.setText(model.getRowCount() + " endpoints discovered");
+                } catch (Exception ignored) {
+                    // SwingWorker.get throws if doInBackground threw; we don't
+                    // want a refresh failure to propagate to the EDT.
+                }
+            }
+        }.execute();
     }
 
     /** Read-only view of {@link EndpointRegistry} sorted by host then path. */
@@ -78,10 +99,8 @@ public final class ScannerTab {
         private static final String[] COLUMNS = {"Host", "Path", "Methods"};
         private List<EndpointRegistry.ApiEndpoint> rows = List.of();
 
-        void update(Collection<EndpointRegistry.ApiEndpoint> snapshot) {
-            List<EndpointRegistry.ApiEndpoint> sorted = new ArrayList<>(snapshot);
-            sorted.sort(Comparator.comparing(EndpointRegistry.ApiEndpoint::host)
-                    .thenComparing(EndpointRegistry.ApiEndpoint::path));
+        /** Called on the EDT with an already-sorted list. */
+        void setRows(List<EndpointRegistry.ApiEndpoint> sorted) {
             this.rows = sorted;
             fireTableDataChanged();
         }

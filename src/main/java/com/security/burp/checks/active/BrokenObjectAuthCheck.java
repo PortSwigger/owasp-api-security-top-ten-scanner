@@ -224,7 +224,8 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
         String detail =
                 "The endpoint returned a 2xx response under test condition <b>" + mode + "</b>:" +
                 "<br><br>Endpoint: <code>" +
-                evidence.request().method() + " " + evidence.request().pathWithoutQuery() +
+                IssueBuilder.escapeHtml(evidence.request().method()) + " " +
+                IssueBuilder.escapeHtml(evidence.request().pathWithoutQuery()) +
                 "</code>.<br><br>" +
                 "Object-level authorization checks must verify the caller's right to the " +
                 "specific object before returning data, on every request.";
