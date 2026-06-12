@@ -152,9 +152,34 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
         }
     }
 
+    /**
+     * Flags an API served over cleartext HTTP — but ONLY when the server
+     * actually processes the request over HTTP (a 2xx response). A server
+     * that answers an http:// request with a 3xx redirect to the https://
+     * equivalent is enforcing HTTPS correctly, not misconfigured; firing on
+     * that is a false positive (confirmed against brokencrystals.com, where
+     * an nginx 308 redirect to HTTPS was wrongly flagged High/Certain and
+     * Burp's own AI returned an "Inconclusive" outcome).
+     */
     private void addInsecureProtocolIssue(HttpRequestResponse rr, List<AuditIssue> sink) {
         String url = rr.request().url();
-        if (url != null && url.startsWith("http://")) sink.add(buildInsecureProtocolIssue(rr));
+        if (url == null || !url.startsWith("http://")) return;
+        if (!rr.hasResponse()) return;
+
+        int status = rr.response().statusCode();
+
+        // 3xx to an https:// Location = correct HTTPS enforcement. Not a finding.
+        if (status >= 300 && status < 400) {
+            String location = headerValue(rr.response(), "location");
+            if (location != null && location.toLowerCase(Locale.ROOT).startsWith("https://")) {
+                return;
+            }
+        }
+
+        // Only flag when the server actually serves content over cleartext.
+        if (status >= 200 && status < 300) {
+            sink.add(buildInsecureProtocolIssue(rr));
+        }
     }
 
     private void addVerboseErrorIssue(HttpRequestResponse rr, List<AuditIssue> sink) {
@@ -281,13 +306,17 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
     private AuditIssue buildInsecureProtocolIssue(HttpRequestResponse rr) {
         return IssueBuilder.issue(rr)
                 .name("API8:2023 - Security Misconfiguration (API over HTTP)")
-                .detail("The API is accessible over unencrypted HTTP. Authentication tokens, " +
-                        "credentials, and request bodies travel in cleartext.")
+                .detail("The API returned a 2xx response over unencrypted HTTP — it processes " +
+                        "requests in cleartext rather than redirecting to HTTPS. Authentication " +
+                        "tokens, credentials, and request bodies sent to this endpoint travel " +
+                        "in cleartext and can be intercepted on the network path.")
                 .remediation("Serve the API exclusively over HTTPS; redirect HTTP to HTTPS at " +
-                        "the edge.")
+                        "the edge (a 308 redirect to the https:// URL) and add an HSTS header.")
                 .background(ISSUE_BACKGROUND)
                 .severity("High")
-                .confidence("Certain")
+                // Firm, not Certain: cleartext transport is confirmed, but whether
+                // sensitive data actually traverses this endpoint is context-dependent.
+                .confidence("Firm")
                 .build();
     }
 

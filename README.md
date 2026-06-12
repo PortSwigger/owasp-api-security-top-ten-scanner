@@ -16,7 +16,7 @@ registered only under Professional.
 mvn clean package -DskipTests
 ```
 
-Produces `target/burp-api-scanner-2.0.0.jar`. Load via **Extensions →
+Produces `target/burp-api-scanner-2.0.1.jar`. Load via **Extensions →
 Installed → Add → Java**.
 
 Requires JDK 17+ (Montoya API requirement) and Maven 3.6+.
@@ -25,7 +25,7 @@ The banner in the extension's Output tab will look like:
 
 ```
 ====================================
-Advanced API Security Scanner v2.0.0
+Advanced API Security Scanner v2.0.1
 OWASP API Security Top 10 (2023) coverage
 Edition: Burp Suite Professional
 AI features: enabled
@@ -69,7 +69,7 @@ detail and the coverage table with notes.
     the hardcoded `isAdmin`/`role`/etc. payloads, the model proposes
     domain-specific privileged fields (`priceOverride`,
     `organizationRole`, …) given the observed JSON body.
-  Both features have JVM-property kill switches and time out at 10
+  Both features have JVM-property kill switches and time out at 2
   seconds per prompt.
 
 ## Documentation

@@ -27,13 +27,13 @@ jobs:
       - name: Confirm fat JAR
         run: |
           set -e
-          test -f target/burp-api-scanner-2.0.0.jar
-          ls -lh target/burp-api-scanner-2.0.0.jar
+          test -f target/burp-api-scanner-2.0.1.jar
+          ls -lh target/burp-api-scanner-2.0.1.jar
 
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: burp-api-scanner-${{ github.sha }}
-          path: target/burp-api-scanner-2.0.0.jar
+          path: target/burp-api-scanner-2.0.1.jar
           if-no-files-found: error
           retention-days: 30
