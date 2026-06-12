@@ -91,13 +91,13 @@ com.security.burp/
 │   ├── AbstractPassiveCheck #   base classes — exception handling, triage
 │   ├── AbstractActiveCheck
 │   ├── passive/             # 6 passive checks
-│   └── active/              # 7 active checks
+│   └── active/              # 9 active checks
 ├── scanner/EndpointRegistry # shared state for the UI tab
 ├── ui/ScannerTab            # Swing tab listing discovered endpoints
 └── util/IssueBuilder        # fluent AuditIssue construction
 ```
 
-13 scan checks total, registered individually with the appropriate
+15 scan checks total, registered individually with the appropriate
 `ScanCheckType` (`PER_INSERTION_POINT`, `PER_HOST`, or `PER_REQUEST`).
 See [CLAUDE.md](CLAUDE.md) for the full breakdown.
 

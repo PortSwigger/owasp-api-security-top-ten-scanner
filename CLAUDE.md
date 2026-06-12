@@ -13,7 +13,7 @@ src/main/java/com/security/burp/
 ├── BurpExtender.java              # Entry point. Declares EnhancedCapability.AI_FEATURES,
 │                                  # registers checks, wires the unloading handler.
 ├── ai/                            # AI integration layer (optional, gates on api.ai().isEnabled())
-│   ├── AiClient.java              #   wrapper around api.ai() with executor + 10s timeout + cache
+│   ├── AiClient.java              #   wrapper around api.ai() with executor + 2s timeout + cache
 │   ├── AiTriage.java              #   passive-finding KEEP/SUPPRESS filter
 │   └── AiFieldDiscovery.java      #   contextual privileged-field suggestions for mass assignment
 ├── checks/
@@ -21,7 +21,7 @@ src/main/java/com/security/burp/
 │   │                              # handling (with stack-trace logging), AI triage.
 │   ├── AbstractActiveCheck.java   # Same, for active checks.
 │   ├── passive/                   # 6 passive checks, all extend AbstractPassiveCheck
-│   └── active/                    # 7 active checks, all extend AbstractActiveCheck
+│   └── active/                    # 9 active checks, all extend AbstractActiveCheck
 │       └── injection/             # InjectionCheck splits into 3 files (coordinator,
 │                                  # AuthBypassTester, InjectionPayloads)
 ├── scanner/
@@ -50,7 +50,7 @@ Load in Burp via **Extensions → Installed → Add → Java**.
 
 ## Conventions
 
-These are the patterns established across all 13 checks. Stick to them
+These are the patterns established across all 15 checks. Stick to them
 when adding new ones — Hannah's review feedback was the catalyst for the
 v2 rewrite, and breaking these breaks the property she cared about
 (reviewable code).
@@ -90,7 +90,7 @@ v2 rewrite, and breaking these breaks the property she cared about
 
 3. **AI calls must time out.** `api.ai().prompt().execute(...)` is
    synchronous and can block indefinitely. `AiClient` runs prompts on a
-   dedicated daemon executor with a 10s hard timeout, so one stuck
+   dedicated daemon executor with a 2s hard timeout, so one stuck
    prompt cannot block a scan thread. PortSwigger BApp criterion #5.
 
 4. **Use `edition.displayName()`, not the raw enum.** The Montoya enum

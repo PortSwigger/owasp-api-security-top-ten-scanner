@@ -120,13 +120,14 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
     private void addDisclosureHeadersIssue(HttpRequestResponse rr, List<AuditIssue> sink) {
         List<String> found = new ArrayList<>();
         for (HttpHeader header : rr.response().headers()) {
-            String name = header.name() == null ? "" : header.name().toLowerCase(Locale.ROOT);
-            DisclosurePattern pattern = DISCLOSURE_PATTERNS.get(name);
+            String headerName = header.name();
+            if (headerName == null) continue;
+            DisclosurePattern pattern = DISCLOSURE_PATTERNS.get(headerName.toLowerCase(Locale.ROOT));
             if (pattern == null) continue;
             String value = header.value();
             if (value == null) continue;
             if (pattern.valueMatch().matcher(value).matches()) {
-                found.add(IssueBuilder.escapeHtml(header.name() + ": " + value));
+                found.add(IssueBuilder.escapeHtml(headerName + ": " + value));
             }
         }
         if (!found.isEmpty()) sink.add(buildDisclosureHeadersIssue(rr, found));

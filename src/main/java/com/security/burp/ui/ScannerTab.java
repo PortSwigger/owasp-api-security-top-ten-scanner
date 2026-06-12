@@ -1,5 +1,6 @@
 package com.security.burp.ui;
 
+import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.ui.swing.SwingUtils;
 import com.security.burp.scanner.EndpointRegistry;
 
@@ -11,6 +12,8 @@ import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.table.AbstractTableModel;
 import java.awt.BorderLayout;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -33,12 +36,14 @@ public final class ScannerTab {
     private final EndpointRegistry registry;
     @SuppressWarnings("unused") // retained for future popups; see class javadoc.
     private final SwingUtils swingUtils;
+    private final MontoyaApi api;
     private final JPanel panel;
     private final EndpointTableModel model;
     private final JLabel statusLabel;
     private final Timer refreshTimer;
 
-    public ScannerTab(EndpointRegistry registry, SwingUtils swingUtils) {
+    public ScannerTab(MontoyaApi api, EndpointRegistry registry, SwingUtils swingUtils) {
+        this.api = api;
         this.registry = registry;
         this.swingUtils = swingUtils;
         this.model = new EndpointTableModel();
@@ -86,9 +91,14 @@ public final class ScannerTab {
                 try {
                     model.setRows(get());
                     statusLabel.setText(model.getRowCount() + " endpoints discovered");
-                } catch (Exception ignored) {
-                    // SwingWorker.get throws if doInBackground threw; we don't
-                    // want a refresh failure to propagate to the EDT.
+                } catch (Exception e) {
+                    // Catch broadly to protect the EDT — a refresh failure must
+                    // not crash the UI — but log so a real problem stays
+                    // debuggable (was previously a silent catch flagged by
+                    // automated review).
+                    StringWriter trace = new StringWriter();
+                    e.printStackTrace(new PrintWriter(trace));
+                    api.logging().logToError("[ScannerTab] refresh failed:\n" + trace);
                 }
             }
         }.execute();

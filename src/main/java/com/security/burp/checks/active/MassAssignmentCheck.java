@@ -224,13 +224,15 @@ public final class MassAssignmentCheck extends AbstractActiveCheck {
                 ? "API3:2023 - Mass Assignment Privilege Escalation"
                 : "API3:2023 - Broken Object Property Level Authorization (Mass Assignment)";
 
+        String safeField = IssueBuilder.escapeHtml(field);
+        String safeValue = IssueBuilder.escapeHtml(value);
         String detail = privEsc
-                ? "Sending <code>" + field + " = " + value + "</code> in the request body " +
+                ? "Sending <code>" + safeField + " = " + safeValue + "</code> in the request body " +
                   "caused the field to be accepted and echoed in the response. The field name " +
                   "suggests a privileged property — this is a mass-assignment privilege " +
                   "escalation."
-                : "The endpoint accepted the previously-absent field <code>" + field + "</code> " +
-                  "(value: <code>" + value + "</code>) and echoed it back in the response.";
+                : "The endpoint accepted the previously-absent field <code>" + safeField + "</code> " +
+                  "(value: <code>" + safeValue + "</code>) and echoed it back in the response.";
 
         return IssueBuilder.issue(base)
                 .name(name)
@@ -247,9 +249,14 @@ public final class MassAssignmentCheck extends AbstractActiveCheck {
     private AuditIssue buildComboIssue(HttpRequestResponse base,
                                        HttpRequestResponse evidence,
                                        List<String> accepted) {
+        StringBuilder escapedList = new StringBuilder();
+        for (int i = 0; i < accepted.size(); i++) {
+            if (i > 0) escapedList.append(", ");
+            escapedList.append(IssueBuilder.escapeHtml(accepted.get(i)));
+        }
         String detail =
                 "The endpoint accepted multiple privileged fields in a single request: <b>" +
-                String.join(", ", accepted) + "</b>. " +
+                escapedList + "</b>. " +
                 "This is the worst case for mass assignment — a single request can flip " +
                 "every privileged property at once.";
         return IssueBuilder.issue(base)

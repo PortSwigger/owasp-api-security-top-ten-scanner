@@ -93,7 +93,8 @@ public final class BusinessFlowCheck extends AbstractPassiveCheck {
 
     private static boolean hasAntiAutomation(HttpResponse response) {
         for (HttpHeader header : response.headers()) {
-            if (ANTI_AUTOMATION_HEADERS.contains(header.name().toLowerCase(Locale.ROOT))) {
+            String name = header.name();
+            if (name != null && ANTI_AUTOMATION_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
                 return true;
             }
         }

@@ -85,7 +85,7 @@ true:
   (`priceOverride`, `organizationRole`, etc.) in addition to the
   hardcoded list, and the existing test logic injects each one.
 
-Each AI call has a 10-second hard timeout. AI errors are logged but
+Each AI call has a 2-second hard timeout. AI errors are logged but
 never fail a scan.
 
 Kill switches (JVM system properties on the DAST process):

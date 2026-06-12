@@ -156,7 +156,9 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
 
     private AuditIssue buildSensitiveDataIssue(HttpRequestResponse rr, List<String> paths) {
         StringBuilder list = new StringBuilder();
-        for (String path : paths) list.append("- <code>").append(path).append("</code><br>");
+        for (String path : paths) {
+            list.append("- <code>").append(IssueBuilder.escapeHtml(path)).append("</code><br>");
+        }
         String detail =
                 "Fields whose names suggest sensitive content appear in the response:<br><br>" +
                 list + "<br>Filter response payloads with explicit allow-lists (DTOs) so that " +

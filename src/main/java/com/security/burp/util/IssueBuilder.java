@@ -34,6 +34,14 @@ public final class IssueBuilder {
     private String background = "";
     private AuditIssueSeverity severity = AuditIssueSeverity.INFORMATION;
     private AuditIssueConfidence confidence = AuditIssueConfidence.TENTATIVE;
+    /**
+     * Typical severity for the issue category. Distinct from {@link #severity}
+     * which is this finding's instance rating. Defaults to MEDIUM so the
+     * builder doesn't silently collapse the Montoya distinction; callers
+     * should set it explicitly via {@link #typicalSeverity(String)} when the
+     * category has a different "usual" rating.
+     */
+    private AuditIssueSeverity typicalSeverity = AuditIssueSeverity.MEDIUM;
 
     private IssueBuilder(HttpRequestResponse base) {
         this.base = base;
@@ -58,6 +66,16 @@ public final class IssueBuilder {
         return this;
     }
 
+    /**
+     * Set the typical severity for this issue category (what severity an
+     * average finding of this type carries). Distinct from {@link #severity}
+     * which is the rating for the specific finding being built.
+     */
+    public IssueBuilder typicalSeverity(String typicalSeverity) {
+        this.typicalSeverity = severityFromString(typicalSeverity);
+        return this;
+    }
+
     public IssueBuilder evidence(HttpRequestResponse... evidence) {
         this.evidence = evidence;
         return this;
@@ -78,7 +96,7 @@ public final class IssueBuilder {
                 confidence,
                 background,
                 "",
-                severity,
+                typicalSeverity,
                 List.of(requests));
     }
 
