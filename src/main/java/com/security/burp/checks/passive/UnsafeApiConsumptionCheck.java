@@ -29,9 +29,14 @@ import java.util.Set;
  */
 public final class UnsafeApiConsumptionCheck extends AbstractPassiveCheck {
 
-    /** Path keywords identifying webhook / external-event receivers. */
+    /**
+     * Path keywords identifying webhook receivers. Kept webhook-specific:
+     * broad terms like {@code /callback} (OAuth redirect URIs), {@code /notify}
+     * (notification UIs) and {@code /event} (analytics) matched far too many
+     * non-webhook endpoints and were removed.
+     */
     private static final Set<String> WEBHOOK_PATH_KEYWORDS = Set.of(
-            "/webhook", "/callback", "/notify", "/event", "/integration");
+            "/webhook", "/webhooks", "/web-hook", "/inbound-webhook", "/hook-receiver");
 
     private static final String ISSUE_BACKGROUND =
             "API10:2023 - Unsafe Consumption of APIs<br><br>" +

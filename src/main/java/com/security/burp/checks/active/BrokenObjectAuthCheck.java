@@ -8,6 +8,7 @@ import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.scanner.audit.insertionpoint.AuditInsertionPoint;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import com.security.burp.checks.AbstractActiveCheck;
+import com.security.burp.util.HttpUtils;
 import com.security.burp.util.IssueBuilder;
 
 import java.util.ArrayList;
@@ -77,9 +78,20 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
         if (!hasObjectIdentifier(rr.request().url())) return List.of();
 
         List<AuditIssue> issues = new ArrayList<>();
-        addIfFound(issues, tryIdManipulation(rr, http), "id-manipulation", "Critical");
+
+        // ID-manipulation and enumeration are only meaningful on an
+        // AUTHENTICATED request: BOLA means reaching another principal's
+        // object despite being logged in as someone else. On an
+        // unauthenticated request a 2xx for any ID just means the endpoint
+        // is public — not a vulnerability. (The missing-auth case is covered
+        // separately by the unauthenticated test below.) Without this guard
+        // the check fires Critical on every public /articles/{id} endpoint.
+        boolean authenticated = hasAnyAuthHeader(rr.request());
+        if (authenticated) {
+            addIfFound(issues, tryIdManipulation(rr, http), "id-manipulation", "Critical");
+            if (idEnumerable(rr, http)) issues.add(buildEnumerationIssue(rr));
+        }
         addIfFound(issues, tryUnauthenticated(rr, http), "unauthenticated", "Critical");
-        if (idEnumerable(rr, http)) issues.add(buildEnumerationIssue(rr));
         return issues;
     }
 
@@ -170,8 +182,13 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
     private HttpRequestResponse sendIfSuccess(HttpRequest request, Http http) {
         try {
             HttpRequestResponse response = http.sendRequest(request);
-            return (response != null && response.hasResponse() && isSuccess(response.response().statusCode()))
-                    ? response : null;
+            if (response == null || !response.hasResponse()) return null;
+            if (!isSuccess(response.response().statusCode())) return null;
+            // A 200 carrying an error/"not found"/"forbidden" body is the
+            // server refusing access with a sloppy status code — not a
+            // successful object read. Don't treat it as BOLA.
+            if (HttpUtils.looksRejected(response.response())) return null;
+            return response;
         } catch (Exception e) {
             api.logging().logToError("[BOLA] send failed: " + e.getMessage());
             return null;

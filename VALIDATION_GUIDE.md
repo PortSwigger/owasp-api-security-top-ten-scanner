@@ -31,16 +31,30 @@ fixing?". Triage if needed, then prioritise.
 | Finding | Why it's CERTAIN |
 |---|---|
 | **JWT `alg: none`** | Token verification is bypassed — any forged token is accepted. |
-| **SQL injection (error-based)** | A SQL engine error string in the response proves untrusted input reached the SQL parser. |
-| **Command injection** | Output of `whoami` / `ls` / etc. in the response proves shell execution. |
-| **SSRF to cloud IMDS** | Cloud-metadata content in the response proves the server fetched the attacker-supplied URL. |
-| **Reflected XSS** | The unencoded payload appears in the response body. |
-| **API over HTTP** | The URL scheme is `http://`; transport is plaintext. |
-| **TRACE method enabled** | TRACE responded with 200 — Cross-Site Tracing is reachable. |
+| **SQL injection (error-based)** | A SQL engine error string *not present in the baseline* appeared after the payload — input reached the SQL parser. |
+| **Command injection** | Command output (`root:`, `/bin/`, …) *new vs the baseline* appeared after the payload — the OS executed it. |
+| **SSRF to cloud IMDS** | Cloud-metadata content appeared in a 2xx response and was absent from the baseline — the server fetched the attacker URL. |
+| **TRACE method enabled** | TRACE returned 200 **and echoed our marker header back** — Cross-Site Tracing is confirmed, not just assumed. |
 | **API version disclosed in header** | The header value is itself the disclosure. |
 
 For these: no manual validation needed. Confirm scope ownership, then
 fix.
+
+> **Note on baseline diffing (v2.1.0+).** The injection and SSRF checks
+> now only fire when the marker is *new versus the unmutated baseline
+> response* — a marker that already appears in docs, error pages, or
+> static content no longer triggers a finding. This removes a class of
+> false positive that earlier versions produced.
+
+A few findings that look "certain" are deliberately reported a notch
+lower because a single response can't fully prove exploitability:
+
+- **Reflected XSS** — reported **Firm**, and only when the response
+  Content-Type is HTML. A JSON API echoing the payload as a string
+  value is not exploitable, so it is no longer flagged.
+- **API over HTTP** — reported **Firm**, and only on a 2xx cleartext
+  response. A 3xx redirect to the `https://` equivalent is correct
+  enforcement and is suppressed.
 
 ---
 

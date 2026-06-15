@@ -8,6 +8,7 @@ import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.scanner.audit.insertionpoint.AuditInsertionPoint;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import com.security.burp.checks.AbstractActiveCheck;
+import com.security.burp.util.HttpUtils;
 import com.security.burp.util.IssueBuilder;
 
 import java.util.ArrayList;
@@ -139,8 +140,13 @@ public final class FunctionLevelAuthCheck extends AbstractActiveCheck {
     private HttpRequestResponse sendOrNull(HttpRequest request, Http http) {
         try {
             HttpRequestResponse response = http.sendRequest(request);
-            return (response != null && response.hasResponse() && isSuccess(response.response().statusCode()))
-                    ? response : null;
+            if (response == null || !response.hasResponse()) return null;
+            if (!isSuccess(response.response().statusCode())) return null;
+            // A 2xx whose body is an error/"unauthorized"/"forbidden" message
+            // means authorization actually held (the server just used a sloppy
+            // status code). Don't count it as the privileged action succeeding.
+            if (HttpUtils.looksRejected(response.response())) return null;
+            return response;
         } catch (Exception e) {
             api.logging().logToError("[Function Level Auth] Send failed: " + e.getMessage());
             return null;

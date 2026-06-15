@@ -291,15 +291,22 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
     private AuditIssue buildCorsReflectedIssue(HttpRequestResponse rr, String origin) {
         return IssueBuilder.issue(rr)
                 .name("API8:2023 - Security Misconfiguration (CORS Reflected Origin)")
-                .detail("The server reflects the request <code>Origin</code> header back into " +
-                        "<code>Access-Control-Allow-Origin</code> without validation. " +
+                .detail("The server reflects the request <code>Origin</code> back into " +
+                        "<code>Access-Control-Allow-Origin</code>. " +
                         "Origin sent: <code>" + IssueBuilder.escapeHtml(origin) + "</code>.<br><br>" +
-                        "Combined with credentials, this allows full cross-origin attack against " +
-                        "authenticated sessions.")
-                .remediation("Validate the request origin against an allow-list before reflecting.")
+                        "This is dangerous <b>if</b> the server reflects <i>any</i> origin without " +
+                        "validation — combined with credentials it enables full cross-origin " +
+                        "attacks. However, a correctly configured server that validates the origin " +
+                        "against an allow-list before reflecting produces the same single-request " +
+                        "evidence. To confirm, resend with an arbitrary <code>Origin</code> (e.g. " +
+                        "<code>https://evil.example</code>) and check whether it is still reflected.")
+                .remediation("Reflect only origins on an explicit allow-list; never reflect an " +
+                        "unvalidated Origin, especially with Allow-Credentials: true.")
                 .background(ISSUE_BACKGROUND)
-                .severity("High")
-                .confidence("Firm")
+                .severity("Medium")
+                // A single passive observation cannot distinguish validated
+                // allow-list reflection from blind reflection — Tentative.
+                .confidence("Tentative")
                 .build();
     }
 
