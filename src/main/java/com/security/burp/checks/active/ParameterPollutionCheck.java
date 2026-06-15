@@ -79,10 +79,52 @@ public final class ParameterPollutionCheck extends AbstractActiveCheck {
         if (pollutedResponse == null || !pollutedResponse.hasResponse()) return List.of();
         if (!rr.hasResponse()) return List.of();
 
-        if (!responsesDifferMeaningfully(rr.response(), pollutedResponse.response())) {
+        // A status-code change from duplicating the parameter is a strong,
+        // clean HPP signal — fire on it directly.
+        if (rr.response().statusCode() != pollutedResponse.response().statusCode()) {
+            return List.of(buildIssue(rr, pollutedResponse, ip));
+        }
+
+        // Otherwise fall back to a body-length delta — but that signal is
+        // confounded by non-deterministic responses (timestamps, UUIDs,
+        // nonces). Measure the endpoint's natural jitter with one unmodified
+        // re-request; only treat the pollution delta as meaningful if it
+        // clearly exceeds that jitter.
+        if (!bodyLengthDeltaExceedsJitter(rr, pollutedResponse, http)) {
             return List.of();
         }
         return List.of(buildIssue(rr, pollutedResponse, ip));
+    }
+
+    /**
+     * True if the polluted-vs-baseline body-length delta is both above the
+     * threshold AND materially larger than the endpoint's own
+     * request-to-request jitter (measured by re-sending the original request
+     * once). Non-deterministic endpoints — fresh UUID/timestamp per response —
+     * exhibit large natural jitter, so their pollution delta is discarded.
+     */
+    private boolean bodyLengthDeltaExceedsJitter(HttpRequestResponse base,
+                                                 HttpRequestResponse polluted,
+                                                 Http http) {
+        int baseLen = lengthOrZero(base.response());
+        int pollutedLen = lengthOrZero(polluted.response());
+        double pollutionDelta = relativeDelta(baseLen, pollutedLen);
+        if (pollutionDelta < BODY_LENGTH_DELTA_THRESHOLD) return false;
+
+        HttpRequestResponse repeat = sendOrNull(base.request(), http);
+        if (repeat == null || !repeat.hasResponse()) {
+            // Can't measure jitter — be conservative and don't fire on length alone.
+            return false;
+        }
+        double naturalJitter = relativeDelta(baseLen, lengthOrZero(repeat.response()));
+        // Require the pollution delta to exceed natural jitter by a clear margin.
+        return pollutionDelta >= naturalJitter + BODY_LENGTH_DELTA_THRESHOLD;
+    }
+
+    private static double relativeDelta(int a, int b) {
+        int max = Math.max(a, b);
+        if (max == 0) return 0.0;
+        return (double) Math.abs(a - b) / max;
     }
 
     // ---- Request construction ----------------------------------------------
@@ -127,19 +169,6 @@ public final class ParameterPollutionCheck extends AbstractActiveCheck {
     }
 
     // ---- Response comparison -----------------------------------------------
-
-    private static boolean responsesDifferMeaningfully(HttpResponse original, HttpResponse polluted) {
-        if (original.statusCode() != polluted.statusCode()) return true;
-
-        int originalLen = lengthOrZero(original);
-        int pollutedLen = lengthOrZero(polluted);
-        int absoluteDelta = Math.abs(originalLen - pollutedLen);
-        if (absoluteDelta == 0) return false;
-        if (originalLen == 0) return true; // any non-zero polluted body is different
-
-        double relativeDelta = (double) absoluteDelta / Math.max(originalLen, pollutedLen);
-        return relativeDelta >= BODY_LENGTH_DELTA_THRESHOLD;
-    }
 
     private static int lengthOrZero(HttpResponse response) {
         String body = response.bodyToString();

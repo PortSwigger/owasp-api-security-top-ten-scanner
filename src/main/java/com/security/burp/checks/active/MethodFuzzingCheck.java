@@ -37,6 +37,10 @@ public final class MethodFuzzingCheck extends AbstractActiveCheck {
             "exfiltrate sensitive headers — including HTTPOnly cookies — that are " +
             "otherwise inaccessible to JavaScript.";
 
+    /** Distinctive marker used to confirm TRACE actually echoes the request. */
+    private static final String XST_MARKER_HEADER = "X-Bapi-Xst-Probe";
+    private static final String XST_MARKER_VALUE = "bapi-xst-7f3c2a";
+
     private final Set<String> dedupe = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public MethodFuzzingCheck(MontoyaApi api) {
@@ -56,6 +60,13 @@ public final class MethodFuzzingCheck extends AbstractActiveCheck {
         if (evidence == null || !evidence.hasResponse()) return List.of();
         if (evidence.response().statusCode() != 200) return List.of();
 
+        // XST requires the TRACE response to ECHO the request back to the
+        // client — that's the whole exploit. A 200 that doesn't reflect our
+        // marker header (e.g. a WAF/proxy returning a canned 200) is not
+        // exploitable, so don't report it.
+        String body = evidence.response().bodyToString();
+        if (body == null || !body.contains(XST_MARKER_VALUE)) return List.of();
+
         return List.of(buildTraceIssue(rr, evidence));
     }
 
@@ -66,7 +77,11 @@ public final class MethodFuzzingCheck extends AbstractActiveCheck {
 
     private HttpRequestResponse sendTrace(HttpRequest base, Http http) {
         try {
-            return http.sendRequest(base.withMethod("TRACE").withBody(""));
+            // Add a distinctive marker header; if TRACE echoes the request,
+            // the marker will appear in the response body (XST confirmation).
+            HttpRequest trace = base.withMethod("TRACE").withBody("")
+                    .withAddedHeader(XST_MARKER_HEADER, XST_MARKER_VALUE);
+            return http.sendRequest(trace);
         } catch (Exception e) {
             api.logging().logToError("[TRACE] send failed: " + e.getMessage());
             return null;

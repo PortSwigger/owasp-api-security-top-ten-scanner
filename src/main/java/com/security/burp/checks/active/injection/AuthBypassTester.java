@@ -37,9 +37,23 @@ public final class AuthBypassTester {
     private static final List<String> PASSWORD_FIELD_NAMES = List.of(
             "password", "pass", "pwd", "secret", "credentials");
 
-    /** Markers in a 200 response that suggest authentication succeeded. */
+    /**
+     * Markers in a 200 response that suggest authentication SUCCEEDED. Kept
+     * specific to positive-success shapes — broad words like "logged" or
+     * "authenticated" were removed because they appear in failure messages
+     * ("not logged in", "not authenticated"), producing false Critical
+     * findings on rejected logins.
+     */
     private static final List<String> SUCCESS_MARKERS = List.of(
-            "token", "\"success\":true", "\"user\"", "logged", "authenticated");
+            "\"token\"", "\"access_token\"", "\"accesstoken\"", "\"jwt\"",
+            "\"success\":true", "\"success\": true",
+            "\"authenticated\":true", "\"authenticated\": true",
+            "set-cookie");
+
+    /** Phrases that indicate the login FAILED — used to veto a success match. */
+    private static final List<String> FAILURE_MARKERS = List.of(
+            "invalid", "incorrect", "failed", "denied", "not authenticated",
+            "not logged", "unauthor", "bad credentials", "error");
 
     private static final String ISSUE_BACKGROUND =
             "API2:2023 - Broken Authentication<br><br>" +
@@ -78,6 +92,12 @@ public final class AuthBypassTester {
         api.logging().logToOutput("[Injection] Auth-endpoint SQL probes on " +
                 rr.request().pathWithoutQuery());
 
+        // Baseline: the original (un-injected) login response. A success marker
+        // already present here proves nothing about our payload.
+        String baselineLower = rr.hasResponse() && rr.response().bodyToString() != null
+                ? rr.response().bodyToString().toLowerCase(Locale.ROOT)
+                : "";
+
         for (String payload : InjectionPayloads.SQL) {
             JsonObject mutated = body.deepCopy();
             mutated.addProperty(userField, "admin");
@@ -88,14 +108,28 @@ public final class AuthBypassTester {
             String responseBodyLower = evidence.response().bodyToString().toLowerCase(Locale.ROOT);
             int status = evidence.response().statusCode();
 
-            if (status == 200 && containsAny(responseBodyLower, SUCCESS_MARKERS)) {
+            // Bypass only if: 200, a positive success marker is present, that
+            // marker is NEW vs the baseline login response, and the body does
+            // not also carry a failure indicator.
+            if (status == 200
+                    && containsAnyNotInBaseline(responseBodyLower, baselineLower, SUCCESS_MARKERS)
+                    && !containsAny(responseBodyLower, FAILURE_MARKERS)) {
                 return buildBypassIssue(rr, evidence, passField, payload);
             }
-            if (containsAny(responseBodyLower, InjectionPayloads.SQL_ERROR_MARKERS)) {
+            // SQL-error leak: only if the error string is NEW vs the baseline
+            // (an error page that always contains a SQL keyword isn't proof).
+            if (containsAnyNotInBaseline(responseBodyLower, baselineLower, InjectionPayloads.SQL_ERROR_MARKERS)) {
                 return buildSqlErrorIssue(rr, evidence, passField, payload);
             }
         }
         return null;
+    }
+
+    private static boolean containsAnyNotInBaseline(String body, String baseline, List<String> needles) {
+        for (String n : needles) {
+            if (body.contains(n) && !baseline.contains(n)) return true;
+        }
+        return false;
     }
 
     // ---- Helpers -----------------------------------------------------------

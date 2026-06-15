@@ -1,6 +1,7 @@
 package com.security.burp.checks.passive;
 
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.http.message.HttpHeader;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import com.google.gson.JsonArray;
@@ -46,6 +47,22 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
             "private_key", "privatekey", "ssn", "social_security", "credit_card",
             "cvv", "pin", "salt", "hash", "internal_id", "internal");
 
+    /**
+     * Field-name substrings that contain a sensitive keyword but are benign —
+     * integrity hashes, cache validators, and password <em>policy</em>
+     * metadata. Matched as substrings; a field whose name contains any of
+     * these is not flagged even if it also matches a sensitive keyword. Stops
+     * the check firing on {@code content_hash}, {@code etag},
+     * {@code password_expiry_days}, etc.
+     */
+    private static final Set<String> BENIGN_FIELD_EXCEPTIONS = Set.of(
+            "content_hash", "contenthash", "integrity_hash", "integrityhash",
+            "checksum", "etag", "hashtag", "hash_tag",
+            "password_change", "passwordchange", "password_expir", "passwordexpir",
+            "password_policy", "passwordpolicy", "password_rotation", "passwordrotation",
+            "password_last", "passwordlast", "password_required", "passwordrequired",
+            "token_expir", "tokenexpir", "token_type", "tokentype");
+
     private static final String ISSUE_BACKGROUND =
             "API3:2023 - Broken Object Property Level Authorization<br><br>" +
             "This category combines the legacy Excessive Data Exposure and Mass Assignment " +
@@ -79,12 +96,36 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
 
         if (root.isJsonArray()) {
             JsonArray array = root.getAsJsonArray();
-            if (array.size() > LARGE_ARRAY_ITEMS) issues.add(buildLargeArrayIssue(rr, array.size()));
+            // A large array is only "unbounded" if the response shows no sign
+            // of pagination. A well-designed paginated API legitimately returns
+            // 100+ items per page alongside pagination headers / params.
+            if (array.size() > LARGE_ARRAY_ITEMS && !looksPaginated(rr)) {
+                issues.add(buildLargeArrayIssue(rr, array.size()));
+            }
 
             Set<String> fields = collectFieldNames(array);
             if (fields.size() > EXCESSIVE_FIELD_COUNT) issues.add(buildExcessiveFieldsIssue(rr, fields));
         }
         return issues;
+    }
+
+    /** True if request or response carries a recognisable pagination signal. */
+    private static boolean looksPaginated(HttpRequestResponse rr) {
+        for (HttpHeader header : rr.response().headers()) {
+            String name = header.name();
+            if (name == null) continue;
+            String lower = name.toLowerCase(Locale.ROOT);
+            if (lower.equals("link") || lower.startsWith("x-total") || lower.startsWith("x-page")
+                    || lower.startsWith("x-per-page") || lower.startsWith("x-next")
+                    || lower.startsWith("x-pagination")) {
+                return true;
+            }
+        }
+        String query = rr.request().query();
+        if (query == null) return false;
+        String q = query.toLowerCase(Locale.ROOT);
+        return q.contains("page") || q.contains("offset") || q.contains("limit")
+                || q.contains("per_page") || q.contains("cursor");
     }
 
     // ---- JSON walking ------------------------------------------------------
@@ -130,6 +171,9 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
     }
 
     private static boolean matchesSensitiveKeyword(String fieldNameLower) {
+        for (String benign : BENIGN_FIELD_EXCEPTIONS) {
+            if (fieldNameLower.contains(benign)) return false;
+        }
         for (String keyword : SENSITIVE_FIELD_KEYWORDS) {
             if (fieldNameLower.contains(keyword)) return true;
         }

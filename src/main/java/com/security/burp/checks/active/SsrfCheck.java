@@ -8,6 +8,7 @@ import burp.api.montoya.http.message.responses.HttpResponse;
 import burp.api.montoya.scanner.audit.insertionpoint.AuditInsertionPoint;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import com.security.burp.checks.AbstractActiveCheck;
+import com.security.burp.util.HttpUtils;
 import com.security.burp.util.IssueBuilder;
 
 import java.util.ArrayList;
@@ -75,8 +76,13 @@ public final class SsrfCheck extends AbstractActiveCheck {
 
         List<AuditIssue> issues = new ArrayList<>();
         for (Payload payload : PAYLOADS) {
+            // If the marker is already in the baseline response (e.g. docs that
+            // mention root:x:0:0, or a page that names the IMDS host), its
+            // presence after the payload proves nothing — skip this payload.
+            if (HttpUtils.baselineContains(rr, payload.marker)) continue;
+
             HttpRequestResponse evidence = sendPayload(rr, ip, http, payload);
-            if (evidence != null && responseSuggestsSsrf(evidence.response(), payload)) {
+            if (evidence != null && responseSuggestsSsrf(evidence, payload)) {
                 issues.add(buildIssue(rr, evidence, ip, payload));
                 break; // One finding per insertion point is enough.
             }
@@ -106,8 +112,19 @@ public final class SsrfCheck extends AbstractActiveCheck {
         }
     }
 
-    private static boolean responseSuggestsSsrf(HttpResponse response, Payload payload) {
-        if (response == null) return false;
+    /**
+     * Fire only when the marker appears in a response the server actually
+     * produced for our payload — not a 4xx validation error that simply
+     * echoes the rejected URL back (e.g. OAuth "redirect_uri is not
+     * whitelisted"). A genuine SSRF surfaces fetched content in a 2xx (or a
+     * 3xx the server followed), not in a client-error rejection.
+     */
+    private static boolean responseSuggestsSsrf(HttpRequestResponse evidence, Payload payload) {
+        if (evidence == null || !evidence.hasResponse()) return false;
+        HttpResponse response = evidence.response();
+        int status = response.statusCode();
+        if (status >= 400) return false;          // validation error / rejection, not a fetch
+        if (HttpUtils.looksRejected(response)) return false;
         String body = response.bodyToString();
         return body != null && body.contains(payload.marker);
     }

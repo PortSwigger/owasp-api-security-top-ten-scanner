@@ -134,7 +134,7 @@ public final class MassAssignmentCheck extends AbstractActiveCheck {
             assignProperty(mutated, field, value);
             HttpRequestResponse evidence = sendBody(rr, http, mutated.toString());
             if (evidence == null) continue;
-            if (responseEchoesField(evidence, field)) {
+            if (fieldGenuinelyAccepted(rr, evidence, field)) {
                 boolean privEsc = looksPrivilegeEscalating(field);
                 return buildSingleFieldIssue(rr, evidence, field, value.toString(), privEsc);
             }
@@ -179,7 +179,7 @@ public final class MassAssignmentCheck extends AbstractActiveCheck {
 
         List<String> accepted = new ArrayList<>();
         for (String field : COMBO_FIELDS) {
-            if (responseEchoesField(evidence, field)) accepted.add(field);
+            if (fieldGenuinelyAccepted(rr, evidence, field)) accepted.add(field);
         }
         return accepted.isEmpty() ? null : buildComboIssue(rr, evidence, accepted);
     }
@@ -199,9 +199,32 @@ public final class MassAssignmentCheck extends AbstractActiveCheck {
         }
     }
 
-    private static boolean responseEchoesField(HttpRequestResponse evidence, String field) {
+    /**
+     * Treat a field as genuinely accepted only when:
+     * <ul>
+     *   <li>it appears in the payload response, AND</li>
+     *   <li>it did NOT already appear in the baseline response — so a field
+     *       name that lives in a schema/metadata block (present either way)
+     *       doesn't count, AND</li>
+     *   <li>the response doesn't read as a validation rejection
+     *       (e.g. {@code "Field 'isAdmin' is not allowed"}).</li>
+     * </ul>
+     * Residual limitation: an endpoint that echoes the raw request body back
+     * for audit/logging will still match, since the field is genuinely new vs
+     * baseline. Distinguishing echo from persistence isn't possible from a
+     * single response; the Firm (not Certain) confidence reflects that.
+     */
+    private static boolean fieldGenuinelyAccepted(HttpRequestResponse base,
+                                                  HttpRequestResponse evidence,
+                                                  String field) {
         String body = evidence.response().bodyToString();
-        return body != null && body.contains("\"" + field + "\"");
+        if (body == null) return false;
+        String token = "\"" + field + "\"";
+        if (!body.contains(token)) return false;
+        if (HttpUtils.looksRejected(evidence.response())) return false;
+        // New vs baseline: if the field name was already in the baseline
+        // response (schema/docs), its presence now proves nothing.
+        return !HttpUtils.baselineContains(base, token);
     }
 
     private static JsonObject parseJsonObjectOrNull(String body) {

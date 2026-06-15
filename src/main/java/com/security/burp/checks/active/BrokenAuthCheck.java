@@ -11,6 +11,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.security.burp.checks.AbstractActiveCheck;
+import com.security.burp.util.HttpUtils;
 import com.security.burp.util.IssueBuilder;
 
 import java.nio.charset.StandardCharsets;
@@ -118,6 +119,10 @@ public final class BrokenAuthCheck extends AbstractActiveCheck {
 
     private static boolean hasApiKeyOverHttp(HttpRequest request) {
         if (request.url() == null || !request.url().startsWith("http://")) return false;
+        // Loopback HTTP has no network intermediary, so the key never leaves
+        // the local machine — flagging http://localhost dev endpoints High is
+        // a false positive. Skip loopback hosts.
+        if (HttpUtils.isLoopbackHost(request.httpService().host())) return false;
         for (HttpHeader header : request.headers()) {
             if (header.name() != null
                     && API_KEY_HEADER_NAMES.contains(header.name().toLowerCase(Locale.ROOT))) {

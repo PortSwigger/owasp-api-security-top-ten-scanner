@@ -42,9 +42,16 @@ public final class BusinessFlowCheck extends AbstractPassiveCheck {
             "x-ratelimit-limit", "x-ratelimit-remaining", "x-rate-limit-limit",
             "retry-after", "x-captcha-required", "x-bot-detection");
 
-    /** Response body markers that suggest a CAPTCHA or other challenge. */
+    /**
+     * Response body markers that suggest a CAPTCHA / bot challenge. These
+     * SUPPRESS the finding (they indicate anti-automation is present), so they
+     * must be specific — the bare word "challenge" was removed because it
+     * appears in benign marketing/UI copy ("complete this challenge!") and
+     * would wrongly suppress a genuine finding.
+     */
     private static final Set<String> ANTI_AUTOMATION_BODY_MARKERS = Set.of(
-            "captcha", "recaptcha", "hcaptcha", "challenge");
+            "captcha", "recaptcha", "hcaptcha", "g-recaptcha",
+            "turnstile", "challenge-platform", "cf-challenge");
 
     private static final String ISSUE_NAME =
             "API6:2023 - Unrestricted Access to Sensitive Business Flow";

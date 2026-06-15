@@ -5,6 +5,7 @@ import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.Http;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.HttpHeader;
 import burp.api.montoya.http.message.responses.HttpResponse;
 import burp.api.montoya.scanner.audit.insertionpoint.AuditInsertionPoint;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
@@ -94,12 +95,14 @@ public final class InjectionCheck extends AbstractActiveCheck {
     private AuditIssue runSql(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
         return runFamily(rr, ip, http,
                 InjectionPayloads.SQL,
-                (response, payload) -> bodyContainsAny(response, InjectionPayloads.SQL_ERROR_MARKERS)
+                // Only fire when the SQL-error marker is NEW vs the baseline —
+                // an error page that always contains "syntax error" isn't proof.
+                (response, payload) -> newMarkerVsBaseline(rr, response, InjectionPayloads.SQL_ERROR_MARKERS)
                         ? "Critical" : null,
                 (base, evidence, payload, severity) -> buildIssue(base, evidence, ip, payload,
                         "API2:2023 - Broken Authentication (SQL Injection)",
-                        "Server response carried a SQL engine error after the payload was " +
-                        "delivered through this insertion point.",
+                        "The payload introduced a SQL engine error that was NOT present in the " +
+                        "baseline response — strong evidence the input reaches a SQL parser.",
                         severity, "Firm", SQL_BACKGROUND));
     }
 
@@ -154,29 +157,37 @@ public final class InjectionCheck extends AbstractActiveCheck {
     private AuditIssue runCommand(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
         return runFamily(rr, ip, http,
                 InjectionPayloads.COMMAND,
+                // Command-output markers (root:, /bin/, ...) appear constantly in
+                // docs and config dumps. Only fire when the marker is NEW vs the
+                // baseline — i.e. the payload actually produced it.
                 (response, payload) -> {
-                    boolean output = bodyContainsAny(response, InjectionPayloads.COMMAND_OUTPUT_MARKERS);
-                    boolean error  = bodyContainsAny(response, InjectionPayloads.COMMAND_ERROR_MARKERS);
+                    boolean output = newMarkerVsBaseline(rr, response, InjectionPayloads.COMMAND_OUTPUT_MARKERS);
+                    boolean error  = newMarkerVsBaseline(rr, response, InjectionPayloads.COMMAND_ERROR_MARKERS);
                     return (output || error) ? "Critical" : null;
                 },
                 (base, evidence, payload, severity) -> buildIssue(base, evidence, ip, payload,
                         "API8:2023 - Security Misconfiguration (Command Injection)",
-                        "Response indicates the OS attempted to execute the injected payload " +
-                        "(either by leaking output or producing a shell error).",
+                        "The payload introduced command-output or shell-error content that was " +
+                        "NOT present in the baseline response — evidence the OS executed it.",
                         severity, "Firm", SQL_BACKGROUND));
     }
 
     private AuditIssue runXss(HttpRequestResponse rr, AuditInsertionPoint ip, Http http) {
         return runFamily(rr, ip, http,
                 InjectionPayloads.XSS,
+                // Reflected markup is only an XSS vector if the response is
+                // actually rendered as HTML. A JSON API echoing the payload as
+                // a string value is not exploitable, so require an HTML
+                // Content-Type before firing.
                 (response, payload) -> {
+                    if (!responseIsHtml(response)) return null;
                     String body = response.bodyToString();
                     return (body != null && body.contains(payload)) ? "Medium" : null;
                 },
                 (base, evidence, payload, severity) -> buildIssue(base, evidence, ip, payload,
                         "API8:2023 - Security Misconfiguration (Reflected XSS in API Response)",
-                        "Response reflects the payload unencoded. If the response is ever " +
-                        "rendered as HTML this is exploitable.",
+                        "An HTML response reflects the payload unencoded — it executes in a " +
+                        "browser context.",
                         severity, "Firm", SQL_BACKGROUND));
     }
 
@@ -217,6 +228,37 @@ public final class InjectionCheck extends AbstractActiveCheck {
         if (body == null) return false;
         String lower = body.toLowerCase(Locale.ROOT);
         for (String needle : needlesLower) if (lower.contains(needle)) return true;
+        return false;
+    }
+
+    /**
+     * True if a marker appears in {@code response} but NOT in the baseline
+     * (unmutated) response. This is what distinguishes a marker the payload
+     * actually produced (real injection evidence) from static content — API
+     * docs listing {@code /bin/bash}, an error page that always contains a
+     * SQL keyword, etc. Without it, marker presence alone over-fires.
+     */
+    private static boolean newMarkerVsBaseline(HttpRequestResponse base,
+                                               HttpResponse response,
+                                               List<String> markersLower) {
+        String body = response.bodyToString();
+        if (body == null) return false;
+        String lower = body.toLowerCase(Locale.ROOT);
+        String baseBody = (base != null && base.hasResponse()) ? base.response().bodyToString() : null;
+        String baseLower = baseBody == null ? "" : baseBody.toLowerCase(Locale.ROOT);
+        for (String marker : markersLower) {
+            if (lower.contains(marker) && !baseLower.contains(marker)) return true;
+        }
+        return false;
+    }
+
+    private static boolean responseIsHtml(HttpResponse response) {
+        for (HttpHeader header : response.headers()) {
+            if ("content-type".equalsIgnoreCase(header.name())) {
+                String v = header.value();
+                return v != null && v.toLowerCase(Locale.ROOT).contains("html");
+            }
+        }
         return false;
     }
 

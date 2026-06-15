@@ -124,19 +124,25 @@ public final class InventoryManagementCheck extends AbstractPassiveCheck {
     private AuditIssue buildDebugEndpointIssue(HttpRequestResponse rr, String path) {
         String safePath = IssueBuilder.escapeHtml(path);
         String detail =
-                "Endpoint <code>" + safePath + "</code> looks like a debug, internal, or management " +
-                "endpoint. If reachable in production this can leak runtime configuration, " +
-                "metrics, or grant administrative actions.";
+                "Endpoint <code>" + safePath + "</code> matches a debug / internal / docs path " +
+                "pattern (e.g. /debug, /actuator, /metrics, /swagger). If reachable and " +
+                "unprotected in production it can leak runtime configuration or grant " +
+                "administrative actions.<br><br>" +
+                "Detected from the path alone — many of these endpoints (published API docs, " +
+                "health probes) are intentional and may be access-controlled. Confirm whether " +
+                "this one is meant to be exposed and whether it is protected.";
         String remediation =
-                "Either remove the endpoint from production builds or restrict access (mTLS, " +
-                "VPN, IP allow-list).";
+                "If unintended, remove it from production. If intended (docs, health probe), " +
+                "restrict access (mTLS, VPN, IP allow-list) and confirm it leaks nothing " +
+                "sensitive.";
         return IssueBuilder.issue(rr)
-                .name("API9:2023 - Improper Inventory Management (Debug Endpoint Exposed)")
+                .name("API9:2023 - Improper Inventory Management (Debug/Management Endpoint)")
                 .detail(detail)
                 .remediation(remediation)
                 .background(ISSUE_BACKGROUND)
-                .severity("Medium")
-                .confidence("Certain")
+                .severity("Low")
+                // Path-pattern heuristic only — Tentative, not Certain.
+                .confidence("Tentative")
                 .build();
     }
 
