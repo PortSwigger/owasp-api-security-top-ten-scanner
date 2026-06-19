@@ -44,7 +44,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 mvn clean package -DskipTests
 ```
 
-Output: `target/burp-api-scanner-2.1.1.jar` (~370 KB fat JAR).
+Output: `target/burp-api-scanner-2.1.2.jar` (~370 KB fat JAR).
 
 Load in Burp via **Extensions → Installed → Add → Java**.
 
