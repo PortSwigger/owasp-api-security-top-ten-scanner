@@ -13,7 +13,7 @@ src/main/java/com/security/burp/
 ├── BurpExtender.java              # Entry point. Declares EnhancedCapability.AI_FEATURES,
 │                                  # registers checks, wires the unloading handler.
 ├── ai/                            # AI integration layer (optional, gates on api.ai().isEnabled())
-│   ├── AiClient.java              #   wrapper around api.ai() with executor + 2s timeout + cache
+│   ├── AiClient.java              #   wrapper around api.ai(): bounded thread pool + 2s timeout + cache
 │   ├── AiTriage.java              #   passive-finding KEEP/SUPPRESS filter
 │   └── AiFieldDiscovery.java      #   contextual privileged-field suggestions for mass assignment
 ├── checks/
@@ -44,7 +44,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 mvn clean package -DskipTests
 ```
 
-Output: `target/burp-api-scanner-2.1.0.jar` (~370 KB fat JAR).
+Output: `target/burp-api-scanner-2.1.1.jar` (~370 KB fat JAR).
 
 Load in Burp via **Extensions → Installed → Add → Java**.
 
@@ -88,10 +88,13 @@ v2 rewrite, and breaking these breaks the property she cared about
    headers EXCEPT Host. See `BrokenObjectAuthCheck.sendWithReplacedId`
    and `DeprecatedVersionProbeCheck.rebuildAtVersion` for the right shape.
 
-3. **AI calls must time out.** `api.ai().prompt().execute(...)` is
-   synchronous and can block indefinitely. `AiClient` runs prompts on a
-   dedicated daemon executor with a 2s hard timeout, so one stuck
-   prompt cannot block a scan thread. PortSwigger BApp criterion #5.
+3. **AI calls must time out AND run on a multi-worker pool.**
+   `api.ai().prompt().execute(...)` is synchronous and can block
+   indefinitely. `AiClient` runs prompts on a bounded daemon thread
+   pool (4 workers) with a 2s hard timeout. The pool must have several
+   workers, not one: with a single worker, concurrent scan threads
+   queue and can time out while still *waiting in the queue* rather
+   than during the actual call. PortSwigger BApp criterion #5.
 
 4. **Use `edition.displayName()`, not the raw enum.** The Montoya enum
    constant is `BurpSuiteEdition.ENTERPRISE_EDITION` for backward

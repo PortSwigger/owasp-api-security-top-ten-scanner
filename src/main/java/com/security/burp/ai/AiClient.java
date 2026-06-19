@@ -12,17 +12,22 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Thin wrapper around {@code api.ai()}.
  *
  * <p>Three responsibilities:
  * <ul>
- *   <li><b>Threading.</b> Calls run on a dedicated executor with a hard
- *       timeout, so a slow or stuck prompt never blocks a scan thread
- *       indefinitely (PortSwigger BApp criterion #5).</li>
+ *   <li><b>Threading.</b> Calls run on a small bounded thread pool with a
+ *       hard timeout, so a slow or stuck prompt never blocks a scan thread
+ *       indefinitely (PortSwigger BApp criterion #5). The pool has several
+ *       workers so concurrent scan threads are serviced in parallel — the
+ *       timeout then measures the actual in-flight call, not time spent
+ *       queued behind other callers.</li>
  *   <li><b>Caching.</b> Identical prompts (same system + user message) are
  *       deduplicated to keep credit consumption bounded.</li>
  *   <li><b>Failure tolerance.</b> Any exception, timeout, or unavailability
@@ -41,6 +46,13 @@ public final class AiClient {
      * under high-volume scans (Zak / automated review feedback).
      */
     private static final long DEFAULT_TIMEOUT_SECONDS = 2;
+    /**
+     * Worker threads servicing AI calls. A bounded pool (not a single thread)
+     * so concurrent scan threads have their prompts run in parallel; with one
+     * worker, callers would queue and could time out while still waiting in
+     * the queue rather than during the actual call (automated review feedback).
+     */
+    private static final int POOL_SIZE = 4;
     private static final double DETERMINISTIC_TEMPERATURE = 0.0;
 
     private final MontoyaApi api;
@@ -50,10 +62,14 @@ public final class AiClient {
 
     public AiClient(MontoyaApi api) {
         this.api = api;
-        this.executor = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "burp-api-scanner-ai");
-            thread.setDaemon(true);
-            return thread;
+        this.executor = Executors.newFixedThreadPool(POOL_SIZE, new ThreadFactory() {
+            private final AtomicInteger n = new AtomicInteger();
+            @Override
+            public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable, "burp-api-scanner-ai-" + n.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            }
         });
         this.cache = new ConcurrentHashMap<>();
         this.killSwitch = Boolean.getBoolean("com.security.burp.ai.disabled");
