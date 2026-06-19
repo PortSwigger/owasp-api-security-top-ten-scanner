@@ -135,6 +135,28 @@ v2 rewrite, and breaking these breaks the property she cared about
 6. Run `mvn clean package` — the build will fail loudly on style /
    import / typing problems before the JAR is produced.
 
+## Detection-logic discipline (the #1 false-positive source)
+
+Every false positive this extension has shipped came from one mistake:
+**firing on a signal without confirming it actually indicates the
+vulnerability.** Before adding or changing any check, walk this
+checklist — every row is a bug we actually shipped and had to fix.
+
+| Ask yourself | Why | Real example |
+|---|---|---|
+| Does a 2xx actually mean success? | A `200` with `{"error":"not found"}` is the server refusing access with a sloppy status code. Inspect the body (`HttpUtils.looksRejected`). | BOLA fired Critical on a 200-with-error-body; FunctionLevelAuth too. |
+| Did my payload cause the marker, or was it already there? | A marker in static content (docs, error page, cached response) proves nothing. Diff against the baseline `rr.response()` (`HttpUtils.baselineContains`). | SSRF fired on `root:x:0:0` in API docs; command injection on `/bin/bash` in a config dump. |
+| Does a *difference* between responses prove a vuln, or just a different input being handled? | A `2xx → 4xx` on a mutated/polluted request is usually the server correctly rejecting bad input. Check the *direction*: a bypass is non-2xx → 2xx, never 2xx → 4xx. | HPP fired on `200 → 400` (invalid duplicate value rejected). |
+| Is the value reflected, or actually processed? | An echoed `redirect_uri` in a validation error is input reflection, not SSRF. A request field echoed for audit logging isn't mass assignment. | SSRF on OAuth reject-echo; MassAssignment on request-echo. |
+| Is enforcement being mistaken for the flaw? | A `308` to `https://` is correct HTTPS enforcement, not "API over HTTP". | API-over-HTTP fired on every redirect. |
+| Does my confidence match my proof? | Keyword / path / header-presence heuristics are **Tentative**, not Certain. Reserve Certain for self-proving evidence (a SQL error *new vs baseline*, TRACE echoing a planted marker). | Several passive checks were Certain on path-keyword matches. |
+| On an ambiguous or unparseable signal, do I fail toward NOT firing? | Suppressing a finding (or asserting one) on doubt erodes trust. Default to keep-the-finding / don't-fire. | `AiTriage` now KEEPs on any non-clean verdict. |
+
+**The one-line rule:** a check may only fire when the evidence would
+convince a skeptical pentester that the *specific* vulnerability is
+present — not merely that "something is different" or "a keyword
+appeared". When in doubt, don't fire.
+
 ## Reference
 
 - [Montoya API Javadoc](https://portswigger.github.io/burp-extensions-montoya-api/javadoc/burp/api/montoya/MontoyaApi.html)
