@@ -16,7 +16,7 @@ registered only under Professional.
 mvn clean package -DskipTests
 ```
 
-Produces `target/burp-api-scanner-2.1.1.jar`. Load via **Extensions →
+Produces `target/burp-api-scanner-2.1.2.jar`. Load via **Extensions →
 Installed → Add → Java**.
 
 Requires JDK 17+ (Montoya API requirement) and Maven 3.6+.
@@ -25,7 +25,7 @@ The banner in the extension's Output tab will look like:
 
 ```
 ====================================
-Advanced API Security Scanner v2.1.1
+Advanced API Security Scanner v2.1.2
 OWASP API Security Top 10 (2023) coverage
 Edition: Burp Suite Professional
 AI features: enabled

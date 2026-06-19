@@ -79,21 +79,37 @@ public final class ParameterPollutionCheck extends AbstractActiveCheck {
         if (pollutedResponse == null || !pollutedResponse.hasResponse()) return List.of();
         if (!rr.hasResponse()) return List.of();
 
-        // A status-code change from duplicating the parameter is a strong,
-        // clean HPP signal — fire on it directly.
-        if (rr.response().statusCode() != pollutedResponse.response().statusCode()) {
+        int baseStatus = rr.response().statusCode();
+        int pollutedStatus = pollutedResponse.response().statusCode();
+
+        // The polluted request must SUCCEED for this to be interesting. A 4xx/5xx
+        // means the server rejected the duplicate (or the injected value was
+        // invalid for the parameter's type) — that is safe handling, not an
+        // exploitable parsing inconsistency. In particular a 2xx->4xx transition
+        // (e.g. orderId=123&orderId=<non-numeric> -> 400) is the server correctly
+        // refusing bad input and must NOT fire.
+        if (!isSuccess(pollutedStatus)) return List.of();
+
+        // Polluted request succeeded. If the BASELINE did not succeed, the
+        // duplicate parameter turned a rejected request into an accepted one —
+        // a strong parameter-pollution / validation-bypass signal.
+        if (!isSuccess(baseStatus)) {
             return List.of(buildIssue(rr, pollutedResponse, ip));
         }
 
-        // Otherwise fall back to a body-length delta — but that signal is
-        // confounded by non-deterministic responses (timestamps, UUIDs,
-        // nonces). Measure the endpoint's natural jitter with one unmodified
-        // re-request; only treat the pollution delta as meaningful if it
-        // clearly exceeds that jitter.
+        // Both succeeded: only meaningful if the body changed materially. That
+        // signal is confounded by non-deterministic responses (timestamps,
+        // UUIDs, nonces), so measure the endpoint's natural jitter with one
+        // unmodified re-request and only fire if the pollution delta clearly
+        // exceeds it.
         if (!bodyLengthDeltaExceedsJitter(rr, pollutedResponse, http)) {
             return List.of();
         }
         return List.of(buildIssue(rr, pollutedResponse, ip));
+    }
+
+    private static boolean isSuccess(int status) {
+        return status >= 200 && status < 300;
     }
 
     /**
