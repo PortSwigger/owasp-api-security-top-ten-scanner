@@ -6,6 +6,18 @@ This is a Burp Suite extension implementing OWASP API Security Top 10
 (2023) coverage. It is built on the Montoya API and targets Burp Suite
 Professional and Burp Suite DAST.
 
+> **Branch note.** `main` is the **lean, BApp-Store build** (9 checks):
+> only the API-specific checks Burp's native scanner does *not* already
+> cover. The complete re-detecting build (15 checks — injection, SSRF,
+> method-fuzzing, JWT/auth, CORS/CSP/security-misconfig) lives on the
+> `full` branch and the `v2.1.2` tag. The lean build was the outcome of
+> BApp review: native duplication is the #1 rejection reason, so the
+> duplicating checks were removed here and cross-referenced instead (see
+> the README OWASP→native mapping and the "Related Burp Scanner checks"
+> lines on the surviving part-overlap issues). Default `mvn package` on
+> `main` must produce the lean BApp build — PortSwigger's pipeline builds
+> the default.
+
 ## Architecture
 
 ```
@@ -20,10 +32,13 @@ src/main/java/com/security/burp/
 │   ├── AbstractPassiveCheck.java  # Base class. Centralises endpoint recording, exception
 │   │                              # handling (with stack-trace logging), AI triage.
 │   ├── AbstractActiveCheck.java   # Same, for active checks.
-│   ├── passive/                   # 6 passive checks, all extend AbstractPassiveCheck
-│   └── active/                    # 9 active checks, all extend AbstractActiveCheck
-│       └── injection/             # InjectionCheck splits into 3 files (coordinator,
-│                                  # AuthBypassTester, InjectionPayloads)
+│   ├── passive/                   # 5 passive checks, all extend AbstractPassiveCheck
+│   │                              #   (BusinessFlow, ExcessiveDataExposure,
+│   │                              #   InventoryManagement, ResourceConsumption,
+│   │                              #   UnsafeApiConsumption)
+│   └── active/                    # 4 active checks, all extend AbstractActiveCheck
+│                                  #   (BrokenObjectAuth, DeprecatedVersionProbe,
+│                                  #   MassAssignment, ParameterPollution)
 ├── scanner/
 │   └── EndpointRegistry.java      # Bounded thread-safe state shared with the UI tab.
 │                                  # Cleared on unload.
@@ -44,16 +59,16 @@ export PATH="$JAVA_HOME/bin:$PATH"
 mvn clean package -DskipTests
 ```
 
-Output: `target/burp-api-scanner-2.1.2.jar` (~370 KB fat JAR).
+Output: `target/burp-api-scanner-2.2.0.jar` (~370 KB fat JAR).
 
 Load in Burp via **Extensions → Installed → Add → Java**.
 
 ## Conventions
 
-These are the patterns established across all 15 checks. Stick to them
-when adding new ones — Hannah's review feedback was the catalyst for the
-v2 rewrite, and breaking these breaks the property she cared about
-(reviewable code).
+These are the patterns established across all checks (9 on `main`, 15 on
+`full`). Stick to them when adding new ones — Hannah's review feedback was
+the catalyst for the v2 rewrite, and breaking these breaks the property
+she cared about (reviewable code).
 
 - **Each check extends `AbstractPassiveCheck` or `AbstractActiveCheck`.**
   Subclasses implement one method (`audit(...)`) and don't worry about
@@ -61,8 +76,9 @@ v2 rewrite, and breaking these breaks the property she cared about
 - **Constants at the top of the class.** Path keywords, payload tables,
   HTML strings for issue descriptions — pull them up.
 - **Methods under ~50 LOC**, classes under ~250 LOC. The largest current
-  file is `SecurityMisconfigCheck.java` at 305 LOC because it has 5 sub-
-  checks; further splitting would just add ceremony.
+  file on `main` is `MassAssignmentCheck.java` (~300 LOC) because it has
+  several sub-tests (single-field, combo, AI-suggested fields); further
+  splitting would just add ceremony.
 - **No swallowed exceptions.** The base classes log uncaught throwables
   with a full stack trace via `api.logging().logToError(...)`. If you
   catch yourself, log the same way.
@@ -146,7 +162,7 @@ checklist — every row is a bug we actually shipped and had to fix.
 |---|---|---|
 | Does a 2xx actually mean success? | A `200` with `{"error":"not found"}` is the server refusing access with a sloppy status code. Inspect the body (`HttpUtils.looksRejected`). | BOLA fired Critical on a 200-with-error-body; FunctionLevelAuth too. |
 | Did my payload cause the marker, or was it already there? | A marker in static content (docs, error page, cached response) proves nothing. Diff against the baseline `rr.response()` (`HttpUtils.baselineContains`). | SSRF fired on `root:x:0:0` in API docs; command injection on `/bin/bash` in a config dump. |
-| Does a *difference* between responses prove a vuln, or just a different input being handled? | A `2xx → 4xx` on a mutated/polluted request is usually the server correctly rejecting bad input. Check the *direction*: a bypass is non-2xx → 2xx, never 2xx → 4xx. | HPP fired on `200 → 400` (invalid duplicate value rejected). |
+| Does a *difference* between responses prove a vuln, or just a different input being handled? | Judge by **mechanism, not status direction**. For a *single mutated value*, a `2xx → 4xx` is usually the server correctly rejecting bad input — not a bypass. **But duplicate-parameter pollution is the documented exception:** if polluting with our marker flips `200 → 400`, the server is reading the *last* value and discarding the legitimate first one — a real HPP override primitive. So ParameterPollution fires on *any* status change. | Two opposite FPs: an injection check firing on a `200 → 400` rejection; **and** HPP wrongly *suppressing* a real `200 → 400` override (over-correction — a reviewer confirmed the suppressed case was genuine). |
 | Is the value reflected, or actually processed? | An echoed `redirect_uri` in a validation error is input reflection, not SSRF. A request field echoed for audit logging isn't mass assignment. | SSRF on OAuth reject-echo; MassAssignment on request-echo. |
 | Is enforcement being mistaken for the flaw? | A `308` to `https://` is correct HTTPS enforcement, not "API over HTTP". | API-over-HTTP fired on every redirect. |
 | Does my confidence match my proof? | Keyword / path / header-presence heuristics are **Tentative**, not Certain. Reserve Certain for self-proving evidence (a SQL error *new vs baseline*, TRACE echoing a planted marker). | Several passive checks were Certain on path-keyword matches. |

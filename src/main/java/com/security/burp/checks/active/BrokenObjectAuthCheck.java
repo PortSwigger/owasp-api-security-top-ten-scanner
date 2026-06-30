@@ -14,7 +14,6 @@ import com.security.burp.util.IssueBuilder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -23,17 +22,20 @@ import java.util.regex.Pattern;
 /**
  * OWASP API1:2023 — Broken Object Level Authorization (BOLA / IDOR).
  *
- * <p>Three sub-tests, all gated on the URL containing what looks like an
+ * <p>Two sub-tests, both gated on the URL containing what looks like an
  * object identifier (numeric, UUID, or MongoDB ObjectID, optionally in a
- * query parameter):
+ * query parameter), and both requiring a <em>content</em> comparison
+ * against the baseline (a 2xx alone is not enough):
  * <ol>
  *   <li><b>ID manipulation:</b> swap the numeric ID for a few other values
- *       and look for a 2xx;</li>
- *   <li><b>unauthenticated access:</b> strip authentication headers and
- *       look for a 2xx;</li>
+ *       and fire only when a different object is returned;</li>
  *   <li><b>sequential enumeration:</b> if multiple adjacent numeric IDs
- *       return 2xx, the namespace is enumerable.</li>
+ *       each return a distinct object, the namespace is enumerable.</li>
  * </ol>
+ *
+ * <p>The earlier unauthenticated-access sub-test (strip auth headers, look
+ * for a 2xx) was removed in v2.2.0: that case is Burp's native "Broken
+ * access control" issue, so re-detecting it duplicated the native scanner.
  *
  * <p>Registered {@code PER_HOST}; deduped per (host + path).
  */
@@ -51,9 +53,6 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
 
     private static final int[] ID_TEST_VALUES = {1, 2, 100, 999};
     private static final int[] ENUMERATION_OFFSETS = {-2, -1, 1, 2};
-
-    private static final Set<String> AUTH_HEADERS = Set.of(
-            "authorization", "cookie", "x-api-key", "x-auth-token");
 
     private static final String ISSUE_BACKGROUND =
             "API1:2023 - Broken Object Level Authorization<br><br>" +
@@ -79,20 +78,34 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
 
         List<AuditIssue> issues = new ArrayList<>();
 
-        // ID-manipulation and enumeration are only meaningful on an
-        // AUTHENTICATED request: BOLA means reaching another principal's
-        // object despite being logged in as someone else. On an
-        // unauthenticated request a 2xx for any ID just means the endpoint
-        // is public — not a vulnerability. (The missing-auth case is covered
-        // separately by the unauthenticated test below.) Without this guard
-        // the check fires Critical on every public /articles/{id} endpoint.
-        boolean authenticated = hasAnyAuthHeader(rr.request());
-        if (authenticated) {
-            addIfFound(issues, tryIdManipulation(rr, http), "id-manipulation", "Critical");
-            if (idEnumerable(rr, http)) issues.add(buildEnumerationIssue(rr));
-        }
-        addIfFound(issues, tryUnauthenticated(rr, http), "unauthenticated", "Critical");
+        // ID manipulation and enumeration only. The unauthenticated-access
+        // test was removed — that case is Burp's native "Broken access
+        // control" issue (see README OWASP mapping); re-detecting it
+        // duplicated the native scanner.
+        //
+        // Both sub-tests require a CONTENT comparison against the baseline,
+        // not just a 2xx: a finding fires only when swapping the ID returns a
+        // *different object* than the original request did. That distinguishes
+        // "reached another resource" (the BOLA signal) from "same response /
+        // ID ignored", and is what justifies Firm confidence on a single
+        // observation (the human still confirms the two objects shouldn't be
+        // cross-accessible).
+        addIfFound(issues, tryIdManipulation(rr, http), "id manipulation");
+        if (idEnumerable(rr, http)) issues.add(buildEnumerationIssue(rr));
         return issues;
+    }
+
+    private String baselineBody(HttpRequestResponse rr) {
+        return rr.hasResponse() && rr.response().bodyToString() != null
+                ? rr.response().bodyToString() : null;
+    }
+
+    /** A modified-ID response is evidence only if it returns different content. */
+    private boolean returnedDifferentObject(HttpRequestResponse evidence, String baseline) {
+        if (evidence == null) return false;
+        String body = evidence.response().bodyToString();
+        if (body == null || body.isEmpty()) return false;
+        return baseline == null || !body.equals(baseline);
     }
 
     private boolean shouldRunOnce(HttpRequestResponse rr) {
@@ -118,18 +131,13 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
         int originalId = parseSilently(matcher.group(1));
         if (originalId < 0) return null;
 
+        String baseline = baselineBody(rr);
         for (int candidate : ID_TEST_VALUES) {
             if (candidate == originalId || candidate <= 0) continue;
             HttpRequestResponse evidence = sendWithReplacedId(rr, http, originalId, candidate);
-            if (evidence != null) return evidence;
+            if (returnedDifferentObject(evidence, baseline)) return evidence;
         }
         return null;
-    }
-
-    private HttpRequestResponse tryUnauthenticated(HttpRequestResponse rr, Http http) {
-        if (!hasAnyAuthHeader(rr.request())) return null;
-        HttpRequest stripped = removeHeaders(rr.request(), AUTH_HEADERS);
-        return sendIfSuccess(stripped, http);
     }
 
     private boolean idEnumerable(HttpRequestResponse rr, Http http) {
@@ -138,11 +146,14 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
         int originalId = parseSilently(matcher.group(1));
         if (originalId < 0) return false;
 
+        String baseline = baselineBody(rr);
         int hits = 0;
         for (int offset : ENUMERATION_OFFSETS) {
             int candidate = originalId + offset;
             if (candidate <= 0) continue;
-            if (sendWithReplacedId(rr, http, originalId, candidate) != null) hits++;
+            if (returnedDifferentObject(sendWithReplacedId(rr, http, originalId, candidate), baseline)) {
+                hits++;
+            }
             if (hits >= 2) return true;
         }
         return false;
@@ -197,28 +208,7 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
 
     private static boolean isSuccess(int status) { return status >= 200 && status < 300; }
 
-    // ---- Header utilities --------------------------------------------------
-
-    private static boolean hasAnyAuthHeader(HttpRequest request) {
-        for (HttpHeader header : request.headers()) {
-            if (header.name() != null
-                    && AUTH_HEADERS.contains(header.name().toLowerCase(Locale.ROOT))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static HttpRequest removeHeaders(HttpRequest request, Set<String> namesLower) {
-        HttpRequest result = request;
-        for (HttpHeader header : request.headers()) {
-            if (header.name() != null
-                    && namesLower.contains(header.name().toLowerCase(Locale.ROOT))) {
-                result = result.withRemovedHeader(header);
-            }
-        }
-        return result;
-    }
+    // ---- Parsing -----------------------------------------------------------
 
     private static int parseSilently(String s) {
         try {
@@ -230,29 +220,29 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
 
     // ---- Issues ------------------------------------------------------------
 
-    private void addIfFound(List<AuditIssue> sink,
-                            HttpRequestResponse evidence,
-                            String mode,
-                            String severity) {
-        if (evidence != null) sink.add(buildAccessIssue(evidence, mode, severity));
+    private void addIfFound(List<AuditIssue> sink, HttpRequestResponse evidence, String mode) {
+        if (evidence != null) sink.add(buildAccessIssue(evidence, mode));
     }
 
-    private AuditIssue buildAccessIssue(HttpRequestResponse evidence, String mode, String severity) {
+    private AuditIssue buildAccessIssue(HttpRequestResponse evidence, String mode) {
         String detail =
-                "The endpoint returned a 2xx response under test condition <b>" + mode + "</b>:" +
-                "<br><br>Endpoint: <code>" +
+                "Changing the object identifier (" + IssueBuilder.escapeHtml(mode) + ") returned a " +
+                "<b>different object</b> than the original request — the response body differs " +
+                "from the baseline.<br><br>Endpoint: <code>" +
                 IssueBuilder.escapeHtml(evidence.request().method()) + " " +
                 IssueBuilder.escapeHtml(evidence.request().pathWithoutQuery()) +
                 "</code>.<br><br>" +
-                "Object-level authorization checks must verify the caller's right to the " +
-                "specific object before returning data, on every request.";
+                "If the two objects belong to different users/tenants, this is Broken Object " +
+                "Level Authorization. Confirm the returned object should not be accessible to " +
+                "the original caller." +
+                RELATED_CHECKS;
         return IssueBuilder.issue(evidence)
                 .name("API1:2023 - Broken Object Level Authorization")
                 .detail(detail)
                 .remediation("Verify ownership/membership of the requested object against the " +
                         "authenticated principal in the route handler.")
                 .background(ISSUE_BACKGROUND)
-                .severity(severity)
+                .severity("High")
                 .confidence("Firm")
                 .evidence(evidence)
                 .build();
@@ -261,9 +251,10 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
     private AuditIssue buildEnumerationIssue(HttpRequestResponse rr) {
         return IssueBuilder.issue(rr)
                 .name("API1:2023 - Broken Object Level Authorization (Sequential ID Enumeration)")
-                .detail("Multiple adjacent numeric IDs return 2xx responses. The object " +
-                        "namespace is enumerable; combined with weak authorization, this " +
-                        "enables bulk extraction.")
+                .detail("Multiple adjacent numeric IDs each return a <b>distinct object</b> " +
+                        "(different response bodies). The object namespace is enumerable; " +
+                        "combined with weak authorization this enables bulk extraction." +
+                        RELATED_CHECKS)
                 .remediation("Use opaque identifiers (UUIDs) or scope identifiers per-tenant; " +
                         "rate-limit ID-bearing endpoints.")
                 .background(ISSUE_BACKGROUND)
@@ -271,4 +262,9 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
                 .confidence("Firm")
                 .build();
     }
+
+    /** Cross-reference to native Burp coverage (DAST-compatible; static). */
+    private static final String RELATED_CHECKS =
+            "<br><br><b>Related Burp Scanner checks:</b> Broken access control. " +
+            "Cross-check the native scanner's findings for this host.";
 }

@@ -27,19 +27,28 @@ import java.util.regex.Pattern;
  */
 public final class InventoryManagementCheck extends AbstractPassiveCheck {
 
-    /** Path patterns suggesting a deprecated version or legacy code path. */
+    /**
+     * Path patterns suggesting a deprecated version or legacy code path.
+     * Only {@code /v0/} is treated as deprecated — {@code /v1/} is the
+     * <em>current</em> version on most APIs, so flagging it produced a false
+     * positive on nearly every modern API (removed per BApp review).
+     */
     private static final List<Pattern> DEPRECATED_PATH_PATTERNS = List.of(
-            Pattern.compile(".*/v0/.*"),
-            Pattern.compile(".*/v1/.*"));
+            Pattern.compile(".*/v0/.*"));
 
     private static final Set<String> DEPRECATED_PATH_KEYWORDS = Set.of(
-            "/deprecated/", "/legacy/", "/old/", "-old", "-v1", "-deprecated");
+            "/deprecated/", "/legacy/", "/old/", "-old", "-deprecated");
 
-    /** Path keywords that suggest a debug / internal / management endpoint. */
+    /**
+     * Path keywords that suggest a debug / internal / management endpoint.
+     * Documentation paths ({@code /swagger}, {@code /api-docs},
+     * {@code /openapi}) were removed: they are intentional published artefacts,
+     * and Burp's native scanner already reports exposed API definitions.
+     */
     private static final Set<String> DEBUG_PATH_KEYWORDS = Set.of(
             "/debug", "/test", "/dev", "/staging", "/_debug",
             "/internal", "/admin", "/actuator", "/metrics",
-            "/health", "/status", "/swagger", "/api-docs", "/openapi");
+            "/health", "/status");
 
     private static final Set<String> VERSION_HEADER_NAMES = Set.of(
             "x-api-version", "api-version");
@@ -124,15 +133,15 @@ public final class InventoryManagementCheck extends AbstractPassiveCheck {
     private AuditIssue buildDebugEndpointIssue(HttpRequestResponse rr, String path) {
         String safePath = IssueBuilder.escapeHtml(path);
         String detail =
-                "Endpoint <code>" + safePath + "</code> matches a debug / internal / docs path " +
-                "pattern (e.g. /debug, /actuator, /metrics, /swagger). If reachable and " +
+                "Endpoint <code>" + safePath + "</code> matches a debug / internal / management " +
+                "path pattern (e.g. /debug, /actuator, /metrics, /internal). If reachable and " +
                 "unprotected in production it can leak runtime configuration or grant " +
                 "administrative actions.<br><br>" +
-                "Detected from the path alone — many of these endpoints (published API docs, " +
-                "health probes) are intentional and may be access-controlled. Confirm whether " +
-                "this one is meant to be exposed and whether it is protected.";
+                "Detected from the path alone — some of these endpoints (health probes, status " +
+                "pages) are intentional and may be access-controlled. Confirm whether this one " +
+                "is meant to be exposed and whether it is protected.";
         String remediation =
-                "If unintended, remove it from production. If intended (docs, health probe), " +
+                "If unintended, remove it from production. If intended (health probe, status), " +
                 "restrict access (mTLS, VPN, IP allow-list) and confirm it leaks nothing " +
                 "sensitive.";
         return IssueBuilder.issue(rr)

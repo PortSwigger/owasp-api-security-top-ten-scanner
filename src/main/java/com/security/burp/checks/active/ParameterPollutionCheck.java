@@ -82,22 +82,24 @@ public final class ParameterPollutionCheck extends AbstractActiveCheck {
         int baseStatus = rr.response().statusCode();
         int pollutedStatus = pollutedResponse.response().statusCode();
 
-        // The polluted request must SUCCEED for this to be interesting. A 4xx/5xx
-        // means the server rejected the duplicate (or the injected value was
-        // invalid for the parameter's type) — that is safe handling, not an
-        // exploitable parsing inconsistency. In particular a 2xx->4xx transition
-        // (e.g. orderId=123&orderId=<non-numeric> -> 400) is the server correctly
-        // refusing bad input and must NOT fire.
-        if (!isSuccess(pollutedStatus)) return List.of();
-
-        // Polluted request succeeded. If the BASELINE did not succeed, the
-        // duplicate parameter turned a rejected request into an accepted one —
-        // a strong parameter-pollution / validation-bypass signal.
-        if (!isSuccess(baseStatus)) {
+        // A duplicate-named parameter that CHANGES the response means the server
+        // consumed the second value — the precondition for HPP. We fire on any
+        // material difference, in either direction, and leave exploitability to
+        // the analyst (hence Tentative).
+        //
+        // Direction matters differently here than for single-value injection.
+        // For injection a 2xx->4xx is usually the server correctly rejecting bad
+        // input. For HPP it is NOT automatically safe: if polluting with our
+        // marker flips a 200 to a 400, the server is reading the *last* value
+        // (our marker) and discarding the legitimate first one — exactly the
+        // override primitive HPP exploits. An earlier build wrongly suppressed
+        // the 2xx->4xx case; a reviewer confirmed one such case was a genuine
+        // auth-relevant HPP. So we treat ANY status change as a signal.
+        if (baseStatus != pollutedStatus) {
             return List.of(buildIssue(rr, pollutedResponse, ip));
         }
 
-        // Both succeeded: only meaningful if the body changed materially. That
+        // Same status: only meaningful if the body changed materially. That
         // signal is confounded by non-deterministic responses (timestamps,
         // UUIDs, nonces), so measure the endpoint's natural jitter with one
         // unmodified re-request and only fire if the pollution delta clearly
@@ -106,10 +108,6 @@ public final class ParameterPollutionCheck extends AbstractActiveCheck {
             return List.of();
         }
         return List.of(buildIssue(rr, pollutedResponse, ip));
-    }
-
-    private static boolean isSuccess(int status) {
-        return status >= 200 && status < 300;
     }
 
     /**

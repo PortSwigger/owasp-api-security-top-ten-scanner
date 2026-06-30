@@ -8,20 +8,14 @@ import burp.api.montoya.scanner.scancheck.ScanCheckType;
 import com.security.burp.ai.AiClient;
 import com.security.burp.ai.AiFieldDiscovery;
 import com.security.burp.ai.AiTriage;
-import com.security.burp.checks.active.BrokenAuthCheck;
 import com.security.burp.checks.active.BrokenObjectAuthCheck;
 import com.security.burp.checks.active.DeprecatedVersionProbeCheck;
-import com.security.burp.checks.active.FunctionLevelAuthCheck;
-import com.security.burp.checks.active.InjectionCheck;
 import com.security.burp.checks.active.MassAssignmentCheck;
-import com.security.burp.checks.active.MethodFuzzingCheck;
 import com.security.burp.checks.active.ParameterPollutionCheck;
-import com.security.burp.checks.active.SsrfCheck;
 import com.security.burp.checks.passive.BusinessFlowCheck;
 import com.security.burp.checks.passive.ExcessiveDataExposureCheck;
 import com.security.burp.checks.passive.InventoryManagementCheck;
 import com.security.burp.checks.passive.ResourceConsumptionCheck;
-import com.security.burp.checks.passive.SecurityMisconfigCheck;
 import com.security.burp.checks.passive.UnsafeApiConsumptionCheck;
 import com.security.burp.scanner.EndpointRegistry;
 import com.security.burp.ui.ScannerTab;
@@ -86,25 +80,22 @@ public final class BurpExtender implements BurpExtension {
                                     EndpointRegistry endpoints,
                                     AiTriage triage,
                                     AiFieldDiscovery fieldDiscovery) {
-        // Active checks. Frequency reflects what each check operates on.
-        // PER_INSERTION_POINT — checks that mutate parameters.
-        api.scanner().registerActiveScanCheck(
-                new InjectionCheck(api),                          ScanCheckType.PER_INSERTION_POINT);
-        api.scanner().registerActiveScanCheck(
-                new SsrfCheck(api),                               ScanCheckType.PER_INSERTION_POINT);
+        // Only the API-specific checks Burp's native scanner does NOT already
+        // cover are registered here. Checks that duplicated native findings
+        // (injection, SSRF, TRACE/method fuzzing, JWT/auth, CORS/CSP/headers)
+        // were removed per BApp review — the native scanner reports those at
+        // higher confidence, and the OWASP-Top-10 cross-reference for them is
+        // surfaced in the README mapping and in the "Related Burp checks" line
+        // on the issues below. See FULL_BUILD_NOTICE on the `full` branch for
+        // the complete re-detecting build.
+
+        // Active checks.
         api.scanner().registerActiveScanCheck(
                 new MassAssignmentCheck(api, fieldDiscovery),     ScanCheckType.PER_INSERTION_POINT);
         api.scanner().registerActiveScanCheck(
                 new ParameterPollutionCheck(api),                 ScanCheckType.PER_INSERTION_POINT);
-        // PER_HOST — checks that operate on endpoints/methods rather than parameters.
-        api.scanner().registerActiveScanCheck(
-                new MethodFuzzingCheck(api),                      ScanCheckType.PER_HOST);
         api.scanner().registerActiveScanCheck(
                 new BrokenObjectAuthCheck(api),                   ScanCheckType.PER_HOST);
-        api.scanner().registerActiveScanCheck(
-                new FunctionLevelAuthCheck(api),                  ScanCheckType.PER_HOST);
-        api.scanner().registerActiveScanCheck(
-                new BrokenAuthCheck(api),                         ScanCheckType.PER_HOST);
         api.scanner().registerActiveScanCheck(
                 new DeprecatedVersionProbeCheck(api),             ScanCheckType.PER_HOST);
 
@@ -118,8 +109,6 @@ public final class BurpExtender implements BurpExtension {
                 new InventoryManagementCheck(api, endpoints, triage),    ScanCheckType.PER_REQUEST);
         api.scanner().registerPassiveScanCheck(
                 new ResourceConsumptionCheck(api, endpoints, triage),    ScanCheckType.PER_REQUEST);
-        api.scanner().registerPassiveScanCheck(
-                new SecurityMisconfigCheck(api, endpoints, triage),      ScanCheckType.PER_REQUEST);
         api.scanner().registerPassiveScanCheck(
                 new UnsafeApiConsumptionCheck(api, endpoints, triage),   ScanCheckType.PER_REQUEST);
     }
@@ -156,7 +145,7 @@ public final class BurpExtender implements BurpExtension {
 
     private void logBanner(MontoyaApi api, BurpSuiteEdition edition, boolean aiAvailable) {
         api.logging().logToOutput("====================================");
-        api.logging().logToOutput(EXTENSION_NAME + " v2.1.2");
+        api.logging().logToOutput(EXTENSION_NAME + " v2.2.0");
         api.logging().logToOutput("OWASP API Security Top 10 (2023) coverage");
         api.logging().logToOutput("Edition: " + edition.displayName());
         api.logging().logToOutput("AI features: " + (aiAvailable ? "enabled" : "disabled"));

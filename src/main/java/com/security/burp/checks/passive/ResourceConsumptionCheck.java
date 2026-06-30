@@ -106,8 +106,11 @@ public final class ResourceConsumptionCheck extends AbstractPassiveCheck {
                 .detail(detail)
                 .remediation(remediation)
                 .background(ISSUE_BACKGROUND)
-                .severity("Medium")
-                .confidence("Certain")
+                // A large response is measured exactly, but size alone is not
+                // proof of a consumption vulnerability — a legitimately large
+                // export is expected. Heuristic, so Low/Tentative.
+                .severity("Low")
+                .confidence("Tentative")
                 .build();
     }
 
@@ -127,7 +130,10 @@ public final class ResourceConsumptionCheck extends AbstractPassiveCheck {
                 .detail(detail)
                 .remediation(remediation)
                 .background(ISSUE_BACKGROUND)
-                .severity("Low")
+                // Header-absence plus a path-name keyword is weak evidence: the
+                // limit may be enforced upstream without advertising headers.
+                // Informational, Tentative.
+                .severity("Information")
                 .confidence("Tentative")
                 .build();
     }
