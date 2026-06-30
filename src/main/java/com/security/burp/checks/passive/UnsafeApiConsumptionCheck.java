@@ -72,9 +72,12 @@ public final class UnsafeApiConsumptionCheck extends AbstractPassiveCheck {
     private AuditIssue buildWebhookIssue(HttpRequestResponse rr) {
         String path = IssueBuilder.escapeHtml(rr.request().pathWithoutQuery());
         String detail =
-                "Endpoint <code>" + path + "</code> appears to be a webhook receiver. " +
-                "Webhook handlers commonly skip signature verification, schema validation, " +
-                "and source allow-listing.";
+                "Endpoint <code>" + path + "</code> looks like a webhook receiver (matched on " +
+                "the path name). This is a pointer for manual review, not a confirmed flaw: " +
+                "webhook handlers <em>commonly</em> skip signature verification, schema " +
+                "validation, and source allow-listing, but this check has no evidence that " +
+                "this endpoint does. Confirm by inspecting how the handler authenticates the " +
+                "caller and validates the payload.";
         String remediation =
                 "Verify HMAC signatures on webhook payloads, allow-list source IP ranges where " +
                 "the provider publishes them, and validate body shape before any side effect.";
@@ -83,7 +86,9 @@ public final class UnsafeApiConsumptionCheck extends AbstractPassiveCheck {
                 .detail(detail)
                 .remediation(remediation)
                 .background(ISSUE_BACKGROUND)
-                .severity("Medium")
+                // Path-name match only — no evidence the handler is actually
+                // unsafe. Informational pointer for manual review, Tentative.
+                .severity("Information")
                 .confidence("Tentative")
                 .build();
     }

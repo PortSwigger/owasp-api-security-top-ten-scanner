@@ -6,7 +6,6 @@ import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.security.burp.ai.AiTriage;
@@ -19,21 +18,23 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
 /**
  * OWASP API3:2023 — Excessive Data Exposure (one face of Broken Object
  * Property Level Authorization).
  *
- * <p>Three signals from the JSON response body:
+ * <p>Two response-shape signals that Burp's native scanner does not report:
  * <ul>
- *   <li>presence of fields whose <em>name</em> looks sensitive (password,
- *       token, ssn, ...);</li>
  *   <li>top-level array with very large item count (suggests no pagination);</li>
  *   <li>top-level array whose elements expose a large number of distinct
  *       fields (suggests no DTO / field filtering).</li>
  * </ul>
+ *
+ * <p>The earlier sensitive-field-by-name signal was removed in v2.2.0 — the
+ * native scanner already reports specific value leaks ("Password returned in
+ * response", "Credit card numbers disclosed", "Private key disclosed") at
+ * higher confidence, so re-detecting them by field name duplicated it.
  */
 public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
 
@@ -42,33 +43,23 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
     /** Limit recursive descent into JSON to avoid pathological inputs. */
     private static final int MAX_ARRAY_SAMPLE = 10;
 
-    private static final Set<String> SENSITIVE_FIELD_KEYWORDS = Set.of(
-            "password", "passwd", "pwd", "secret", "token", "api_key", "apikey",
-            "private_key", "privatekey", "ssn", "social_security", "credit_card",
-            "cvv", "pin", "salt", "hash", "internal_id", "internal");
-
-    /**
-     * Field-name substrings that contain a sensitive keyword but are benign —
-     * integrity hashes, cache validators, and password <em>policy</em>
-     * metadata. Matched as substrings; a field whose name contains any of
-     * these is not flagged even if it also matches a sensitive keyword. Stops
-     * the check firing on {@code content_hash}, {@code etag},
-     * {@code password_expiry_days}, etc.
-     */
-    private static final Set<String> BENIGN_FIELD_EXCEPTIONS = Set.of(
-            "content_hash", "contenthash", "integrity_hash", "integrityhash",
-            "checksum", "etag", "hashtag", "hash_tag",
-            "password_change", "passwordchange", "password_expir", "passwordexpir",
-            "password_policy", "passwordpolicy", "password_rotation", "passwordrotation",
-            "password_last", "passwordlast", "password_required", "passwordrequired",
-            "token_expir", "tokenexpir", "token_type", "tokentype");
-
     private static final String ISSUE_BACKGROUND =
             "API3:2023 - Broken Object Property Level Authorization<br><br>" +
             "This category combines the legacy Excessive Data Exposure and Mass Assignment " +
             "categories. The root cause is missing authorization at the property level: " +
             "fields are returned to (or accepted from) clients that should not see or " +
             "modify them.";
+
+    /**
+     * Cross-reference to native Burp coverage (DAST-compatible; static). This
+     * check reports the response <em>shape</em> (unbounded arrays, over-broad
+     * projections); specific value leaks are the native scanner's job.
+     */
+    private static final String RELATED_CHECKS =
+            "<br><br><b>Related Burp Scanner checks:</b> for specific sensitive values in " +
+            "responses see the native \"Password returned in later response\", \"Credit card " +
+            "numbers disclosed\", \"Private key disclosed\", and \"Cleartext submission of " +
+            "password\" issues. This issue covers the response shape those checks don't.";
 
     public ExcessiveDataExposureCheck(MontoyaApi api, EndpointRegistry endpoints, AiTriage triage) {
         super(api, endpoints, triage);
@@ -90,9 +81,12 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
         JsonElement root = parseSilently(body);
         if (root == null) return List.of();
 
+        // The sensitive-field-by-name test was removed — Burp's native scanner
+        // already reports specific leaks ("Password returned in response",
+        // "Credit card numbers disclosed", "Private key disclosed", etc.) at
+        // higher confidence. We keep the API-shape signals native doesn't:
+        // unbounded arrays and over-broad object projections.
         List<AuditIssue> issues = new ArrayList<>();
-        List<String> sensitive = findSensitiveFields(root, "");
-        if (!sensitive.isEmpty()) issues.add(buildSensitiveDataIssue(rr, sensitive));
 
         if (root.isJsonArray()) {
             JsonArray array = root.getAsJsonArray();
@@ -138,54 +132,6 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
         }
     }
 
-    private static List<String> findSensitiveFields(JsonElement element, String path) {
-        List<String> found = new ArrayList<>();
-        if (element.isJsonObject()) {
-            walkObject(element.getAsJsonObject(), path, found);
-        } else if (element.isJsonArray()) {
-            walkArray(element.getAsJsonArray(), path, found);
-        }
-        return found;
-    }
-
-    private static void walkObject(JsonObject obj, String path, List<String> sink) {
-        for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-            String fieldName = entry.getKey().toLowerCase(Locale.ROOT);
-            String fullPath = path.isEmpty() ? entry.getKey() : path + "." + entry.getKey();
-            JsonElement value = entry.getValue();
-
-            if (matchesSensitiveKeyword(fieldName) && hasMeaningfulValue(value)) {
-                sink.add(fullPath);
-            }
-            if (value.isJsonObject() || value.isJsonArray()) {
-                sink.addAll(findSensitiveFields(value, fullPath));
-            }
-        }
-    }
-
-    private static void walkArray(JsonArray array, String path, List<String> sink) {
-        int limit = Math.min(array.size(), MAX_ARRAY_SAMPLE);
-        for (int i = 0; i < limit; i++) {
-            sink.addAll(findSensitiveFields(array.get(i), path + "[" + i + "]"));
-        }
-    }
-
-    private static boolean matchesSensitiveKeyword(String fieldNameLower) {
-        for (String benign : BENIGN_FIELD_EXCEPTIONS) {
-            if (fieldNameLower.contains(benign)) return false;
-        }
-        for (String keyword : SENSITIVE_FIELD_KEYWORDS) {
-            if (fieldNameLower.contains(keyword)) return true;
-        }
-        return false;
-    }
-
-    private static boolean hasMeaningfulValue(JsonElement value) {
-        if (value.isJsonNull()) return false;
-        if (value.isJsonPrimitive() && value.getAsString().isEmpty()) return false;
-        return true;
-    }
-
     private static Set<String> collectFieldNames(JsonArray array) {
         Set<String> names = new HashSet<>();
         int limit = Math.min(array.size(), MAX_ARRAY_SAMPLE);
@@ -198,24 +144,6 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
 
     // ---- Issues ------------------------------------------------------------
 
-    private AuditIssue buildSensitiveDataIssue(HttpRequestResponse rr, List<String> paths) {
-        StringBuilder list = new StringBuilder();
-        for (String path : paths) {
-            list.append("- <code>").append(IssueBuilder.escapeHtml(path)).append("</code><br>");
-        }
-        String detail =
-                "Fields whose names suggest sensitive content appear in the response:<br><br>" +
-                list + "<br>Filter response payloads with explicit allow-lists (DTOs) so that " +
-                "back-end model fields cannot leak by accident.";
-        return IssueBuilder.issue(rr)
-                .name("API3:2023 - Broken Object Property Level Authorization (Sensitive Data Exposure)")
-                .detail(detail)
-                .background(ISSUE_BACKGROUND)
-                .severity("Medium")
-                .confidence("Firm")
-                .build();
-    }
-
     private AuditIssue buildLargeArrayIssue(HttpRequestResponse rr, int itemCount) {
         String detail =
                 "The endpoint returned " + itemCount + " items in a single array without an " +
@@ -226,7 +154,7 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
                 "cap on the maximum requestable size.";
         return IssueBuilder.issue(rr)
                 .name("API3:2023 - Broken Object Property Level Authorization (Large Unbounded Response)")
-                .detail(detail)
+                .detail(detail + RELATED_CHECKS)
                 .remediation(remediation)
                 .background(ISSUE_BACKGROUND)
                 .severity("Low")
@@ -244,7 +172,7 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
                 "to return only the data the client needs.";
         return IssueBuilder.issue(rr)
                 .name("API3:2023 - Broken Object Property Level Authorization (Excessive Fields)")
-                .detail(detail)
+                .detail(detail + RELATED_CHECKS)
                 .remediation(remediation)
                 .background(ISSUE_BACKGROUND)
                 .severity("Information")

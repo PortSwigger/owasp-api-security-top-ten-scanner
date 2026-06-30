@@ -251,9 +251,11 @@ public final class MassAssignmentCheck extends AbstractActiveCheck {
         String safeValue = IssueBuilder.escapeHtml(value);
         String detail = privEsc
                 ? "Sending <code>" + safeField + " = " + safeValue + "</code> in the request body " +
-                  "caused the field to be accepted and echoed in the response. The field name " +
-                  "suggests a privileged property — this is a mass-assignment privilege " +
-                  "escalation."
+                  "caused the previously-absent field to be accepted and echoed in the response. " +
+                  "The field name suggests a privileged property, so this is a candidate " +
+                  "mass-assignment privilege escalation.<br><br>Note: the field was echoed, which " +
+                  "is not by itself proof it was persisted — confirm the change took effect on a " +
+                  "subsequent read."
                 : "The endpoint accepted the previously-absent field <code>" + safeField + "</code> " +
                   "(value: <code>" + safeValue + "</code>) and echoed it back in the response.";
 
@@ -281,15 +283,18 @@ public final class MassAssignmentCheck extends AbstractActiveCheck {
                 "The endpoint accepted multiple privileged fields in a single request: <b>" +
                 escapedList + "</b>. " +
                 "This is the worst case for mass assignment — a single request can flip " +
-                "every privileged property at once.";
+                "every privileged property at once.<br><br>" +
+                "Note: the fields were echoed in the response, which is not by itself proof " +
+                "they were persisted — confirm the change took effect on a subsequent read.";
         return IssueBuilder.issue(base)
                 .name("API3:2023 - Broken Object Property Level Authorization (Multiple Field Mass Assignment)")
                 .detail(detail)
                 .remediation("Apply a strict allow-list of writable fields, especially for " +
                         "anything affecting roles, verification, or billing.")
                 .background(ISSUE_BACKGROUND)
-                .severity("Critical")
-                .confidence("Certain")
+                .severity("High")
+                // Firm, not Certain: an echoed value isn't proof of persistence.
+                .confidence("Firm")
                 .evidence(base, evidence)
                 .build();
     }

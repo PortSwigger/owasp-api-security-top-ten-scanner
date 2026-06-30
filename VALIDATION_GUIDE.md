@@ -4,6 +4,13 @@ How to validate findings reported by this extension. Organised by
 Montoya's confidence levels (`CERTAIN` / `FIRM` / `TENTATIVE`) — the
 higher the confidence, the less manual validation is required.
 
+> **Scope.** This guide covers the **lean BApp build** (`main`, 9
+> checks). Findings for injection, SSRF, JWT/authentication, CORS/CSP and
+> other security-misconfiguration classes come from **Burp's native
+> scanner**, not this extension — validate those per Burp's own issue
+> documentation. See the
+> [OWASP → native mapping](BURP_DAST_GUIDE.md#owasp-api-top-10-coverage).
+
 ## Severity mapping note
 
 The extension uses Montoya's four-level severity (`HIGH`, `MEDIUM`,
@@ -22,53 +29,30 @@ conservative (KEEP-when-in-doubt), not authoritative.
 
 ---
 
-## CERTAIN — exploit proven by the request/response itself
-
-These findings carry their own proof of exploitability. The validation
-question is rarely "is this real?" but "is this in scope / worth
-fixing?". Triage if needed, then prioritise.
+## CERTAIN — proven by the request/response itself
 
 | Finding | Why it's CERTAIN |
 |---|---|
-| **JWT `alg: none`** | Token verification is bypassed — any forged token is accepted. |
-| **SQL injection (error-based)** | A SQL engine error string *not present in the baseline* appeared after the payload — input reached the SQL parser. |
-| **Command injection** | Command output (`root:`, `/bin/`, …) *new vs the baseline* appeared after the payload — the OS executed it. |
-| **SSRF to cloud IMDS** | Cloud-metadata content appeared in a 2xx response and was absent from the baseline — the server fetched the attacker URL. |
-| **TRACE method enabled** | TRACE returned 200 **and echoed our marker header back** — Cross-Site Tracing is confirmed, not just assumed. |
-| **API version disclosed in header** | The header value is itself the disclosure. |
+| **API version disclosed in header** | The header value is itself the disclosure — no inference involved. |
 
-For these: no manual validation needed. Confirm scope ownership, then
-fix.
-
-> **Note on baseline diffing (v2.1.0+).** The injection and SSRF checks
-> now only fire when the marker is *new versus the unmutated baseline
-> response* — a marker that already appears in docs, error pages, or
-> static content no longer triggers a finding. This removes a class of
-> false positive that earlier versions produced.
-
-A few findings that look "certain" are deliberately reported a notch
-lower because a single response can't fully prove exploitability:
-
-- **Reflected XSS** — reported **Firm**, and only when the response
-  Content-Type is HTML. A JSON API echoing the payload as a string
-  value is not exploitable, so it is no longer flagged.
-- **API over HTTP** — reported **Firm**, and only on a 2xx cleartext
-  response. A 3xx redirect to the `https://` equivalent is correct
-  enforcement and is suppressed.
+The extension keeps only one self-proving finding. The injection,
+command-execution, SSRF and TRACE findings that used to live here now
+come from Burp's native scanner (validate them per Burp's issue
+documentation). For these: confirm scope ownership, then prioritise.
 
 ---
 
 ## FIRM — strong evidence, context-dependent
 
-These findings have substantive evidence (a 2xx where one wasn't
-expected, a field appearing in a response that didn't ask for it), but
-the *meaning* of that evidence depends on context. Walk through the
-checklist before reporting.
+These findings have substantive evidence, but the *meaning* of that
+evidence depends on context. Walk through the checklist before
+reporting.
 
 ### API1:2023 — BOLA / ID manipulation
 
-**Finding:** changing an object ID in the URL returned a 2xx with
-different data.
+**Finding:** changing an object ID in the URL returned a *different
+object* than the original request (the response body differs from the
+baseline — a 2xx alone does not fire this check).
 
 **Questions to answer:**
 1. Is the authenticated user *supposed* to see that other ID?
@@ -85,10 +69,15 @@ tenants; PII accessible without explicit access grant.
 **False positive scenarios:** public profile endpoints; legitimate
 admin access; shared / collaborative resources.
 
+> **Cross-reference.** The *unauthenticated*-access angle (no session at
+> all) is Burp's native **Broken access control** issue — this check
+> deliberately does not re-detect it. Cross-check that issue for the
+> same host.
+
 ### API1:2023 — Sequential ID enumeration
 
-**Finding:** adjacent numeric IDs all return 2xx, suggesting an
-enumerable namespace.
+**Finding:** multiple adjacent numeric IDs each return a *distinct
+object* (different response bodies), suggesting an enumerable namespace.
 
 **Questions to answer:** Is the namespace meant to be enumerable
 (public articles, public products)? Or is this leaking the existence
@@ -98,36 +87,11 @@ of private records?
 sensitive data, or whether the act of enumeration itself violates a
 property (e.g. unlisted resources).
 
-### API2:2023 — SQL injection auth bypass
-
-**Finding:** a SQL payload in the password field returned a 200 with
-session/token markers.
-
-**Questions to answer:**
-1. Did the response actually issue a valid session?
-2. Or did the API just return a generic 200 with no real credentials?
-
-**How to validate:**
-- Capture any session token / JWT in the response.
-- Use it on a follow-up authenticated endpoint. If it works, this is
-  a confirmed bypass; if it doesn't, the 200 was a placebo.
-
-### API2:2023 — Long-lived JWT (>24h)
-
-**Finding:** `exp` claim is more than 24 hours in the future.
-
-**Questions to answer:** Is the long lifetime an explicit business
-choice (e.g. service-to-service tokens), or an oversight on user
-sessions?
-
-**How to validate:** check the token's `sub` / role — service tokens
-legitimately live long; user-session tokens should not.
-
 ### API3:2023 — Mass assignment
 
 **Finding:** the extension injected `isAdmin: true` (or an AI-suggested
-contextual field like `priceOverride`) and the field was echoed in the
-response.
+contextual field like `priceOverride`) and the field was accepted and
+echoed in the response — and was *not* already present in the baseline.
 
 **Questions to answer:**
 1. Was the field actually saved server-side, or just echoed?
@@ -142,44 +106,39 @@ response.
   business action and verify the price / state actually changed.
 
 **False positive scenarios:** API echoes input but doesn't persist it;
-field is validated and silently ignored.
+field is validated and silently ignored. (This is exactly why the check
+reports **Firm**, not Certain — an echoed value isn't proof of
+persistence.)
 **True positive indicators:** field persists across requests; the
 user can now perform actions they previously couldn't.
 
-### API3:2023 — Excessive data exposure
+### API3:2023 — Excessive data exposure (response shape)
 
-**Finding:** response contains fields whose names suggest sensitive
-content (`password_hash`, `ssn`, `api_key`, …).
+**Finding:** the response is an **unbounded array** (100+ items with no
+pagination signal) or its items carry an **excessive number of distinct
+fields** (over-broad projection). Note: the extension no longer flags
+fields by sensitive-sounding *name* — that overlaps native checks.
 
 **Questions to answer:**
-1. Does the data belong to the requesting user?
-2. Is the field actually populated, or is the schema just
-   over-permissive (empty `password_hash` in every response)?
+1. Is the large/wide response intended (a legitimate bulk export)?
+2. Does the client actually consume every field, or is the back-end
+   model being serialised wholesale?
 
 **How to validate:**
-- Confirm data ownership against the request's principal.
-- Check whether the client code actually consumes the field — if not,
-  it's a pure exposure with no functional cost to remove.
-- Check the value: empty / null values still mean the schema leaks
-  intent, but the impact is lower.
+- Check for a pagination mechanism the check might have missed
+  (cursor in body, non-standard header).
+- Inspect the field set for back-end-only properties leaking through.
 
-### API8:2023 — CORS reflected origin
-
-**Finding:** the response `Access-Control-Allow-Origin` mirrors the
-request `Origin` header.
-
-**How to validate:**
-- Test with an arbitrary `Origin` value — does it still reflect?
-- Is `Access-Control-Allow-Credentials: true` also present? That's
-  the combination that enables cross-origin attacks with credentials.
-
-**False positive scenarios:** the server only reflects from an
-allow-list and the request happened to hit a permitted origin.
+> **Cross-reference.** *Specific value* leaks (passwords, card numbers,
+> private keys in the body) are Burp's native **"Password returned in
+> later response"**, **"Credit card numbers disclosed"**, etc. This
+> check covers the response *shape* those don't.
 
 ### API9:2023 — Deprecated version reachable
 
-**Finding:** the current path was `/v3/...` and `/v2/...` (or
-`/v1/...`) returned 2xx on the same host.
+**Finding:** the current path was `/v3/...` and an older `/v(N-1)/...`
+returned 2xx on the same host. (Note: `/v1/` is no longer treated as
+deprecated on its own — it is the current version on most APIs.)
 
 **Questions to answer:**
 1. Is the old version officially supported (long deprecation window)?
@@ -193,15 +152,15 @@ allow-list and the request happened to hit a permitted origin.
 
 ---
 
-## TENTATIVE — heuristic, high false-positive rate
+## TENTATIVE / INFORMATION — heuristic, high false-positive rate
 
 These findings come from heuristics with no direct exploit proof.
-They're worth knowing about but should never be reported as
-confirmed without manual validation.
+They're worth knowing about but should never be reported as confirmed
+without manual validation.
 
-### API4:2023 — Missing rate limiting
+### API4:2023 — Missing rate limiting (Information)
 
-**Finding:** no `X-RateLimit-*` / `Retry-After` headers on a
+**Finding:** no `X-RateLimit-*` / `RateLimit-*` headers on a
 resource-intensive endpoint path (search, export, report, …).
 
 **How to validate:**
@@ -213,7 +172,7 @@ resource-intensive endpoint path (search, export, report, …).
 
 **False positive scenarios:** WAF / Cloudflare handles rate limiting
 without surfacing headers; legitimate low-value endpoint that doesn't
-need limiting.
+need limiting. (Reported Information/Tentative for exactly this reason.)
 
 ### API6:2023 — Missing anti-automation on sensitive flow
 
@@ -227,30 +186,12 @@ rate-limit headers).
 - Consider whether the action has business impact at scale (financial
   loss, account creation flood, ticket scalping).
 
-### API8:2023 — NoSQL injection (bypass behaviour)
-
-**Finding:** the endpoint returned 200 OK to a payload containing a
-Mongo operator (`{"$ne": null}` etc.) without surfacing a NoSQL
-error.
-
-**How to validate:**
-- Diff the response between the operator payload and a benign
-  payload. If both produce identical 200s, the server is silently
-  accepting the operator — investigate whether it reached the query
-  layer.
-- Try operator combinations that should be semantically distinct
-  (`$ne` vs `$gt` vs `$exists`) and look for behavioural differences
-  in the response.
-- If you have access to the back-end, check whether the input is
-  cast to a string before query construction.
-
-**False positive scenarios:** the server treats the object as a
-string and stores it verbatim; no Mongo query is involved.
-
-### API9:2023 — Debug endpoint exposed
+### API9:2023 — Debug / management endpoint exposed
 
 **Finding:** path looks like `/debug`, `/actuator`, `/metrics`,
-`/swagger`, etc.
+`/internal`, etc. (Documentation paths like `/swagger` and `/openapi`
+are no longer flagged — they are intentional published artefacts and
+Burp's native scanner reports exposed API definitions.)
 
 **How to validate:**
 - Is the endpoint intentionally public (e.g. a public health probe)?
@@ -261,8 +202,9 @@ string and stores it verbatim; no Mongo query is involved.
 ### API10:2023 — HTTP Parameter Pollution
 
 **Finding:** sending the same parameter twice (once with the original
-value, once with a marker) produced a response that differs from the
-single-parameter baseline.
+value, once with a marker) produced a response that **differs** from the
+single-parameter baseline — any status change, in either direction, or a
+material body-length change beyond the endpoint's natural jitter.
 
 **How to validate:**
 - Reproduce the request in Repeater with the polluted parameter.
@@ -278,19 +220,26 @@ single-parameter baseline.
   value, app reads last), the inconsistency is exploitable across
   the security boundary.
 
-**False positive scenarios:** the framework rejects duplicates with a
-4xx (still a behavioural difference, but not exploitable); the
-response varies for other reasons (timestamps, caching).
+> **On a `200 → 400` result:** do **not** dismiss it as the framework
+> safely rejecting a duplicate. If polluting with the marker flips a 200
+> to a 400, the server is reading the *last* value (the marker) and
+> discarding the legitimate first one — that is the override primitive
+> HPP exploits. A reviewer confirmed one such case as a genuine
+> auth-relevant HPP, so the check fires on it (Tentative).
 
+**False positive scenarios:** the response varies for unrelated reasons
+(timestamps, caching) — the jitter guard suppresses most of these, but
+verify in Repeater.
 **True positive indicators:** the polluted response reveals different
 data than the baseline; the security control (WAF, framework router)
 treats the parameter set differently than the application code.
 
-### API10:2023 — Webhook endpoint without signature verification
+### API10:2023 — Webhook receiver (Information)
 
-**Finding:** path matches a webhook pattern (`/webhook`, `/callback`,
-…); cannot tell from response alone whether incoming payloads are
-verified.
+**Finding:** path matches a webhook pattern (`/webhook`,
+`/inbound-webhook`, …). This is a **pointer for manual review**, not a
+confirmed flaw — the check has no evidence the handler is actually
+unsafe.
 
 **How to validate:**
 - Send a synthetic payload from an unrelated source. Does the
@@ -311,5 +260,8 @@ verified.
   triage-survived findings), note in the report which payloads /
   fields the AI proposed. The reviewer should see the model's
   contribution so they can sanity-check it.
-- **For TENTATIVE findings** — never report without manual
+- **For TENTATIVE / INFORMATION findings** — never report without manual
   validation. False positives erode trust in the whole report.
+- **Run Burp's native scanner alongside this extension** — the
+  categories this build delegates (API2/API5/API7/API8) only surface if
+  the built-in scanner is enabled.
