@@ -6,17 +6,21 @@ This is a Burp Suite extension implementing OWASP API Security Top 10
 (2023) coverage. It is built on the Montoya API and targets Burp Suite
 Professional and Burp Suite DAST.
 
-> **Branch note.** `main` is the **lean, BApp-Store build** (9 checks):
-> only the API-specific checks Burp's native scanner does *not* already
-> cover. The complete re-detecting build (15 checks — injection, SSRF,
-> method-fuzzing, JWT/auth, CORS/CSP/security-misconfig) lives on the
-> `full` branch and the `v2.1.2` tag. The lean build was the outcome of
-> BApp review: native duplication is the #1 rejection reason, so the
-> duplicating checks were removed here and cross-referenced instead (see
-> the README OWASP→native mapping and the "Related Burp Scanner checks"
-> lines on the surviving part-overlap issues). Default `mvn package` on
-> `main` must produce the lean BApp build — PortSwigger's pipeline builds
-> the default.
+> **Coverage note.** `main` is the **full build** (15 checks) — complete
+> OWASP API Top 10 (2023) coverage in one extension, and this is what we
+> submit to the BApp Store (renamed **"OWASP Top 10 API Scanner"**).
+> Several checks intentionally overlap Burp's native scanner (injection,
+> SSRF, TRACE, JWT/auth, CORS/CSP/misconfig). Per Hannah's guidance, the
+> overlap is kept — not removed — so the extension gives complete,
+> OWASP-labelled coverage; each overlapping issue instead carries a
+> **"Related Burp Scanner checks"** line in its detail linking to the
+> native check in the [vulnerabilities list](https://portswigger.net/burp/documentation/scanner/vulnerabilities-list).
+>
+> History: v2.2.0 (on the `full` branch and `v2.1.2` tag) briefly went the
+> other way — a *lean* build that removed the duplicating checks. That was
+> reversed in v2.3.0 after re-consulting Hannah: keep-and-cross-reference,
+> don't remove. The confidence/severity recalibrations from the lean pass
+> were kept.
 
 ## Architecture
 
@@ -32,13 +36,16 @@ src/main/java/com/security/burp/
 │   ├── AbstractPassiveCheck.java  # Base class. Centralises endpoint recording, exception
 │   │                              # handling (with stack-trace logging), AI triage.
 │   ├── AbstractActiveCheck.java   # Same, for active checks.
-│   ├── passive/                   # 5 passive checks, all extend AbstractPassiveCheck
+│   ├── passive/                   # 6 passive checks, all extend AbstractPassiveCheck
 │   │                              #   (BusinessFlow, ExcessiveDataExposure,
 │   │                              #   InventoryManagement, ResourceConsumption,
-│   │                              #   UnsafeApiConsumption)
-│   └── active/                    # 4 active checks, all extend AbstractActiveCheck
-│                                  #   (BrokenObjectAuth, DeprecatedVersionProbe,
-│                                  #   MassAssignment, ParameterPollution)
+│   │                              #   SecurityMisconfig, UnsafeApiConsumption)
+│   └── active/                    # 9 active checks, all extend AbstractActiveCheck
+│       └── injection/             #   (BrokenObjectAuth, BrokenAuth, DeprecatedVersionProbe,
+│                                  #   FunctionLevelAuth, Injection, MassAssignment,
+│                                  #   MethodFuzzing, ParameterPollution, Ssrf).
+│                                  #   InjectionCheck splits into injection/{AuthBypassTester,
+│                                  #   InjectionPayloads}.
 ├── scanner/
 │   └── EndpointRegistry.java      # Bounded thread-safe state shared with the UI tab.
 │                                  # Cleared on unload.
@@ -59,16 +66,16 @@ export PATH="$JAVA_HOME/bin:$PATH"
 mvn clean package -DskipTests
 ```
 
-Output: `target/burp-api-scanner-2.2.0.jar` (~370 KB fat JAR).
+Output: `target/burp-api-scanner-2.3.0.jar` (~370 KB fat JAR).
 
 Load in Burp via **Extensions → Installed → Add → Java**.
 
 ## Conventions
 
-These are the patterns established across all checks (9 on `main`, 15 on
-`full`). Stick to them when adding new ones — Hannah's review feedback was
-the catalyst for the v2 rewrite, and breaking these breaks the property
-she cared about (reviewable code).
+These are the patterns established across all 15 checks. Stick to them
+when adding new ones — Hannah's review feedback was the catalyst for the
+v2 rewrite, and breaking these breaks the property she cared about
+(reviewable code).
 
 - **Each check extends `AbstractPassiveCheck` or `AbstractActiveCheck`.**
   Subclasses implement one method (`audit(...)`) and don't worry about
@@ -76,9 +83,15 @@ she cared about (reviewable code).
 - **Constants at the top of the class.** Path keywords, payload tables,
   HTML strings for issue descriptions — pull them up.
 - **Methods under ~50 LOC**, classes under ~250 LOC. The largest current
-  file on `main` is `MassAssignmentCheck.java` (~300 LOC) because it has
-  several sub-tests (single-field, combo, AI-suggested fields); further
-  splitting would just add ceremony.
+  file is `SecurityMisconfigCheck.java` (~360 LOC) because it has several
+  sub-checks; further splitting would just add ceremony.
+- **Overlapping checks cross-reference native.** If a check detects a
+  class Burp's native scanner also covers (injection, SSRF, TRACE,
+  JWT/auth, CORS/CSP/misconfig), append a `RELATED_CHECKS`-style constant
+  to the issue detail naming the native check(s) and linking to the
+  [vulnerabilities list](https://portswigger.net/burp/documentation/scanner/vulnerabilities-list).
+  This is how we keep full OWASP coverage without pretending we detect
+  these better than native does.
 - **No swallowed exceptions.** The base classes log uncaught throwables
   with a full stack trace via `api.logging().logToError(...)`. If you
   catch yourself, log the same way.

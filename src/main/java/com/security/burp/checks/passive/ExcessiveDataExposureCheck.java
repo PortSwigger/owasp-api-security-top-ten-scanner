@@ -31,10 +31,13 @@ import java.util.Set;
  *       fields (suggests no DTO / field filtering).</li>
  * </ul>
  *
- * <p>The earlier sensitive-field-by-name signal was removed in v2.2.0 — the
- * native scanner already reports specific value leaks ("Password returned in
- * response", "Credit card numbers disclosed", "Private key disclosed") at
- * higher confidence, so re-detecting them by field name duplicated it.
+ * <p>The earlier sensitive-field-by-name signal stays removed as of v2.3.0:
+ * matching field names was a weak heuristic (empty {@code password_hash}
+ * fields, benign {@code content_hash}, etc.), and the native scanner reports
+ * actual value leaks ("Password returned in response", "Credit card numbers
+ * disclosed", "Private key disclosed") at higher confidence. Those native
+ * checks are cross-referenced from the issues below; the response-shape
+ * signals here are the part native does not cover.
  */
 public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
 
@@ -57,9 +60,12 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
      */
     private static final String RELATED_CHECKS =
             "<br><br><b>Related Burp Scanner checks:</b> for specific sensitive values in " +
-            "responses see the native \"Password returned in later response\", \"Credit card " +
-            "numbers disclosed\", \"Private key disclosed\", and \"Cleartext submission of " +
-            "password\" issues. This issue covers the response shape those checks don't.";
+            "responses refer to the native <b>Password returned in later response</b>, " +
+            "<b>Credit card numbers disclosed</b>, <b>Private key disclosed</b> and " +
+            "<b>Cleartext submission of password</b> checks in the " +
+            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
+            "Burp Scanner vulnerabilities list</a>. This check covers the response shape " +
+            "those don't.";
 
     public ExcessiveDataExposureCheck(MontoyaApi api, EndpointRegistry endpoints, AiTriage triage) {
         super(api, endpoints, triage);
