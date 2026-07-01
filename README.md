@@ -1,4 +1,4 @@
-# OWASP Top 10 API Scanner
+# OWASP API Security Top 10 Scanner
 
 A Burp Suite extension providing complete OWASP API Security Top 10
 (2023) coverage in one place, built on the
@@ -29,7 +29,7 @@ registered only under Professional.
 mvn clean package -DskipTests
 ```
 
-Produces `target/burp-api-scanner-2.3.0.jar`. Load via **Extensions →
+Produces `target/burp-api-scanner-2.3.1.jar`. Load via **Extensions →
 Installed → Add → Java**.
 
 Requires JDK 17+ (Montoya API requirement) and Maven 3.6+.
@@ -38,7 +38,7 @@ The banner in the extension's Output tab will look like:
 
 ```
 ====================================
-OWASP Top 10 API Scanner v2.3.0
+OWASP API Security Top 10 Scanner v2.3.1
 OWASP API Security Top 10 (2023) coverage
 Edition: Burp Suite Professional
 AI features: enabled

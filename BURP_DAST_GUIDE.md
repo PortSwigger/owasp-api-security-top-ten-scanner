@@ -16,12 +16,12 @@ The extension is shipped as a single fat JAR. Build with:
 mvn clean package -DskipTests
 ```
 
-Output: `target/burp-api-scanner-2.3.0.jar`.
+Output: `target/burp-api-scanner-2.3.1.jar`.
 
 In DAST:
 
 1. **Settings → Extensions → Add extension**
-2. Upload `burp-api-scanner-2.3.0.jar`
+2. Upload `burp-api-scanner-2.3.1.jar`
 3. Enable the extension
 
 There is no per-DAST configuration — once loaded and enabled, the
@@ -35,7 +35,7 @@ healthy load it reads:
 
 ```
 ====================================
-OWASP Top 10 API Scanner v2.3.0
+OWASP API Security Top 10 Scanner v2.3.1
 OWASP API Security Top 10 (2023) coverage
 Edition: Burp Suite DAST
 AI features: enabled       (or "disabled" if Burp AI is off)
@@ -125,7 +125,7 @@ Kill switches (JVM system properties on the DAST process):
 Before running production scans:
 
 - [ ] Extension JAR loaded and enabled in Settings → Extensions
-- [ ] Banner shows `v2.3.0`, the correct `Edition:`, and the expected
+- [ ] Banner shows `v2.3.1`, the correct `Edition:`, and the expected
       `AI features:` state
 - [ ] Scan configuration includes Active + Passive audit (passive-only
       will not surface the active findings — injection, SSRF, BOLA,

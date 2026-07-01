@@ -8,7 +8,7 @@ Professional and Burp Suite DAST.
 
 > **Coverage note.** `main` is the **full build** (15 checks) — complete
 > OWASP API Top 10 (2023) coverage in one extension, and this is what we
-> submit to the BApp Store (renamed **"OWASP Top 10 API Scanner"**).
+> submit to the BApp Store (renamed **"OWASP API Security Top 10 Scanner"**).
 > Several checks intentionally overlap Burp's native scanner (injection,
 > SSRF, TRACE, JWT/auth, CORS/CSP/misconfig). Per Hannah's guidance, the
 > overlap is kept — not removed — so the extension gives complete,
@@ -66,7 +66,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 mvn clean package -DskipTests
 ```
 
-Output: `target/burp-api-scanner-2.3.0.jar` (~370 KB fat JAR).
+Output: `target/burp-api-scanner-2.3.1.jar` (~370 KB fat JAR).
 
 Load in Burp via **Extensions → Installed → Add → Java**.
 
