@@ -34,8 +34,13 @@ import java.util.regex.Pattern;
  * </ol>
  *
  * <p>The earlier unauthenticated-access sub-test (strip auth headers, look
- * for a 2xx) was removed in v2.2.0: that case is Burp's native "Broken
- * access control" issue, so re-detecting it duplicated the native scanner.
+ * for a 2xx) stays removed as of v2.3.0 — the content-comparison rework
+ * above is a genuine detection-quality improvement (a 2xx alone isn't
+ * access), not just anti-duplication. The kept sub-tests still overlap the
+ * native "Broken access control" check, so they cross-reference it below.
+ * (If full parity with the native access-control coverage is wanted, the
+ * unauthenticated sub-test can be restored — it lives on the {@code full}
+ * branch history.)
  *
  * <p>Registered {@code PER_HOST}; deduped per (host + path).
  */
@@ -265,6 +270,8 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
 
     /** Cross-reference to native Burp coverage (DAST-compatible; static). */
     private static final String RELATED_CHECKS =
-            "<br><br><b>Related Burp Scanner checks:</b> Broken access control. " +
-            "Cross-check the native scanner's findings for this host.";
+            "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
+            "<b>Broken access control</b> check in the " +
+            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
+            "Burp Scanner vulnerabilities list</a>.";
 }
