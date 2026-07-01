@@ -164,7 +164,7 @@ public final class BurpExtender implements BurpExtension {
 
     private void logBanner(MontoyaApi api, BurpSuiteEdition edition, boolean aiAvailable) {
         api.logging().logToOutput("====================================");
-        api.logging().logToOutput(EXTENSION_NAME + " v2.3.1");
+        api.logging().logToOutput(EXTENSION_NAME + " v2.3.2");
         api.logging().logToOutput("OWASP API Security Top 10 (2023) coverage");
         api.logging().logToOutput("Edition: " + edition.displayName());
         api.logging().logToOutput("AI features: " + (aiAvailable ? "enabled" : "disabled"));

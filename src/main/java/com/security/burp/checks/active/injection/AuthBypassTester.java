@@ -63,9 +63,7 @@ public final class AuthBypassTester {
     /** Cross-reference to Burp's native scanner (see {@code InjectionCheck}). */
     private static final String RELATED_CHECKS =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>SQL injection</b> check in the " +
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>.";
+            "<a href=\"https://portswigger.net/kb/issues/00100200_sql-injection\">SQL injection</a> check.";
 
     private final MontoyaApi api;
 

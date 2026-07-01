@@ -56,11 +56,11 @@ public final class InjectionCheck extends AbstractActiveCheck {
      */
     private static final String RELATED_CHECKS =
             "<br><br><b>Related Burp Scanner checks:</b> Burp's native scanner detects this " +
-            "class at higher confidence — for further detail refer to <b>SQL injection</b>, " +
-            "<b>OS command injection</b>, <b>Cross-site scripting (reflected)</b>, " +
-            "<b>Server-side JavaScript code injection</b> and <b>NoSQL injection</b> in the " +
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>.";
+            "class at higher confidence — for further detail refer to " +
+            "<a href=\"https://portswigger.net/kb/issues/00100200_sql-injection\">SQL injection</a>, " +
+            "<a href=\"https://portswigger.net/kb/issues/00100100_os-command-injection\">OS command injection</a>, " +
+            "<a href=\"https://portswigger.net/kb/issues/00200300_cross-site-scripting-reflected\">Cross-site scripting (reflected)</a> and " +
+            "<a href=\"https://portswigger.net/kb/issues/00100d00_server-side-javascript-code-injection\">Server-side JavaScript code injection</a>.";
 
     private final AuthBypassTester authBypassTester;
     private final Set<String> authEndpointsTried = Collections.newSetFromMap(new ConcurrentHashMap<>());
