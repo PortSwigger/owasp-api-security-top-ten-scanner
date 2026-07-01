@@ -16,12 +16,12 @@ The extension is shipped as a single fat JAR. Build with:
 mvn clean package -DskipTests
 ```
 
-Output: `target/burp-api-scanner-2.3.1.jar`.
+Output: `target/burp-api-scanner-2.3.2.jar`.
 
 In DAST:
 
 1. **Settings → Extensions → Add extension**
-2. Upload `burp-api-scanner-2.3.1.jar`
+2. Upload `burp-api-scanner-2.3.2.jar`
 3. Enable the extension
 
 There is no per-DAST configuration — once loaded and enabled, the
@@ -35,7 +35,7 @@ healthy load it reads:
 
 ```
 ====================================
-OWASP API Security Top 10 Scanner v2.3.1
+OWASP API Security Top 10 Scanner v2.3.2
 OWASP API Security Top 10 (2023) coverage
 Edition: Burp Suite DAST
 AI features: enabled       (or "disabled" if Burp AI is off)
@@ -73,8 +73,9 @@ this extension for the deepest results.
 | **API10:2023** — Unsafe Consumption of APIs | Active + Passive | — (API-specific) |
 
 Each overlapping issue carries a **"Related Burp Scanner checks"** line in
-its detail, linking to the native check in the
-[vulnerabilities list](https://portswigger.net/burp/documentation/scanner/vulnerabilities-list).
+its detail that deep-links to the specific native issue definition(s) under
+[portswigger.net/kb/issues](https://portswigger.net/kb/issues) — not just
+the generic vulnerabilities list.
 
 All findings use Montoya's four-level severity (`HIGH`, `MEDIUM`, `LOW`,
 `INFORMATION`). Legacy `Critical` findings are reported as `HIGH` with
@@ -125,7 +126,7 @@ Kill switches (JVM system properties on the DAST process):
 Before running production scans:
 
 - [ ] Extension JAR loaded and enabled in Settings → Extensions
-- [ ] Banner shows `v2.3.1`, the correct `Edition:`, and the expected
+- [ ] Banner shows `v2.3.2`, the correct `Edition:`, and the expected
       `AI features:` state
 - [ ] Scan configuration includes Active + Passive audit (passive-only
       will not surface the active findings — injection, SSRF, BOLA,

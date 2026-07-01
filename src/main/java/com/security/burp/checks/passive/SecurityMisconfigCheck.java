@@ -84,26 +84,22 @@ public final class SecurityMisconfigCheck extends AbstractPassiveCheck {
             "permissive CORS, plaintext transport, verbose errors — open the door to a " +
             "wide range of attacks.";
 
-    private static final String VULN_LIST =
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>";
-
     /** Cross-references to Burp's native scanner, per misconfiguration type. */
     private static final String RELATED_HEADERS =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>Content security policy</b>, <b>Strict transport security not enforced</b> and " +
-            "<b>Frameable response (potential clickjacking)</b> checks in the " + VULN_LIST + ".";
+            "<a href=\"https://portswigger.net/kb/issues/00200509_content-security-policy-not-enforced\">Content security policy: not enforced</a>, " +
+            "<a href=\"https://portswigger.net/kb/issues/01000300_strict-transport-security-not-enforced\">Strict transport security not enforced</a> and " +
+            "<a href=\"https://portswigger.net/kb/issues/005009a0_frameable-response-potential-clickjacking\">Frameable response (potential clickjacking)</a> checks.";
     private static final String RELATED_CORS =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>Cross-origin resource sharing</b> checks in the " + VULN_LIST + ".";
+            "<a href=\"https://portswigger.net/kb/issues/00200600_cross-origin-resource-sharing\">Cross-origin resource sharing</a> checks.";
     private static final String RELATED_TLS =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>Unencrypted communications</b> and <b>Cleartext submission of password</b> " +
-            "checks in the " + VULN_LIST + ".";
+            "<a href=\"https://portswigger.net/kb/issues/01000200_unencrypted-communications\">Unencrypted communications</a> and " +
+            "<a href=\"https://portswigger.net/kb/issues/00300100_cleartext-submission-of-password\">Cleartext submission of password</a> checks.";
     private static final String RELATED_DISCLOSURE =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>Source code disclosure</b> and information-disclosure checks in the " +
-            VULN_LIST + ".";
+            "<a href=\"https://portswigger.net/kb/issues/006000b0_source-code-disclosure\">Source code disclosure</a> check.";
 
     public SecurityMisconfigCheck(MontoyaApi api, EndpointRegistry endpoints, AiTriage triage) {
         super(api, endpoints, triage);

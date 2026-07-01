@@ -60,12 +60,11 @@ public final class ExcessiveDataExposureCheck extends AbstractPassiveCheck {
      */
     private static final String RELATED_CHECKS =
             "<br><br><b>Related Burp Scanner checks:</b> for specific sensitive values in " +
-            "responses refer to the native <b>Password returned in later response</b>, " +
-            "<b>Credit card numbers disclosed</b>, <b>Private key disclosed</b> and " +
-            "<b>Cleartext submission of password</b> checks in the " +
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>. This check covers the response shape " +
-            "those don't.";
+            "responses refer to the native " +
+            "<a href=\"https://portswigger.net/kb/issues/00400200_password-returned-in-later-response\">Password returned in later response</a>, " +
+            "<a href=\"https://portswigger.net/kb/issues/00600500_credit-card-numbers-disclosed\">Credit card numbers disclosed</a> and " +
+            "<a href=\"https://portswigger.net/kb/issues/00600550_private-key-disclosed\">Private key disclosed</a> checks. " +
+            "This check covers the response shape those don't.";
 
     public ExcessiveDataExposureCheck(MontoyaApi api, EndpointRegistry endpoints, AiTriage triage) {
         super(api, endpoints, triage);

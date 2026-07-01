@@ -68,10 +68,9 @@ public final class SsrfCheck extends AbstractActiveCheck {
      */
     private static final String RELATED_CHECKS =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>Out-of-band resource load (HTTP)</b>, <b>External service interaction</b> and " +
-            "<b>File path traversal</b> checks in the " +
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>.";
+            "<a href=\"https://portswigger.net/kb/issues/00100a00_out-of-band-resource-load-http\">Out-of-band resource load (HTTP)</a>, " +
+            "<a href=\"https://portswigger.net/kb/issues/00300210_external-service-interaction-http\">External service interaction (HTTP)</a> and " +
+            "<a href=\"https://portswigger.net/kb/issues/00100300_file-path-traversal\">File path traversal</a> checks.";
 
     public SsrfCheck(MontoyaApi api) {
         super(api);

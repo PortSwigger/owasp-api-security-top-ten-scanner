@@ -66,7 +66,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 mvn clean package -DskipTests
 ```
 
-Output: `target/burp-api-scanner-2.3.1.jar` (~370 KB fat JAR).
+Output: `target/burp-api-scanner-2.3.2.jar` (~370 KB fat JAR).
 
 Load in Burp via **Extensions → Installed → Add → Java**.
 
@@ -88,10 +88,10 @@ v2 rewrite, and breaking these breaks the property she cared about
 - **Overlapping checks cross-reference native.** If a check detects a
   class Burp's native scanner also covers (injection, SSRF, TRACE,
   JWT/auth, CORS/CSP/misconfig), append a `RELATED_CHECKS`-style constant
-  to the issue detail naming the native check(s) and linking to the
-  [vulnerabilities list](https://portswigger.net/burp/documentation/scanner/vulnerabilities-list).
-  This is how we keep full OWASP coverage without pretending we detect
-  these better than native does.
+  to the issue detail that **deep-links each named native check to its
+  specific `/kb/issues/<code>_<slug>` definition** (not the generic
+  vulnerabilities-list page). This is how we keep full OWASP coverage
+  without pretending we detect these better than native does.
 - **No swallowed exceptions.** The base classes log uncaught throwables
   with a full stack trace via `api.logging().logToError(...)`. If you
   catch yourself, log the same way.

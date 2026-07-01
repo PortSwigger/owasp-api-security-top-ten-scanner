@@ -60,19 +60,17 @@ public final class BrokenAuthCheck extends AbstractActiveCheck {
     /** Cross-reference to Burp's native JWT scan checks. */
     private static final String RELATED_JWT =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>JWT signature not verified</b>, <b>JWT none algorithm supported</b>, " +
-            "<b>JWT self-signed JWK header supported</b>, <b>JWT weak HMAC secret</b> and " +
-            "<b>JSON Web Key Set disclosed</b> checks in the " +
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>.";
+            "<a href=\"https://portswigger.net/kb/issues/00200900_jwt-signature-not-verified\">JWT signature not verified</a>, " +
+            "<a href=\"https://portswigger.net/kb/issues/00200901_jwt-none-algorithm-supported\">JWT none algorithm supported</a>, " +
+            "<a href=\"https://portswigger.net/kb/issues/00200902_jwt-self-signed-jwk-header-supported\">JWT self-signed JWK header supported</a>, " +
+            "<a href=\"https://portswigger.net/kb/issues/00200903_jwt-weak-hmac-secret\">JWT weak HMAC secret</a> and " +
+            "<a href=\"https://portswigger.net/kb/issues/00600700_json-web-key-set-disclosed\">Json Web Key Set disclosed</a> checks.";
 
     /** Cross-reference to Burp's native cleartext-credential scan checks. */
     private static final String RELATED_CLEARTEXT =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>Cleartext submission of password</b> and <b>Unencrypted communications</b> " +
-            "checks in the " +
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>.";
+            "<a href=\"https://portswigger.net/kb/issues/00300100_cleartext-submission-of-password\">Cleartext submission of password</a> and " +
+            "<a href=\"https://portswigger.net/kb/issues/01000200_unencrypted-communications\">Unencrypted communications</a> checks.";
 
     private final Set<String> seenTokens = Collections.newSetFromMap(new ConcurrentHashMap<>());
 

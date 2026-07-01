@@ -44,9 +44,7 @@ public final class MethodFuzzingCheck extends AbstractActiveCheck {
     /** Cross-reference to Burp's native scanner. */
     private static final String RELATED_CHECKS =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>HTTP TRACE method is enabled</b> check in the " +
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>.";
+            "<a href=\"https://portswigger.net/kb/issues/00500a00_http-trace-method-is-enabled\">HTTP TRACE method is enabled</a> check.";
 
     private final Set<String> dedupe = Collections.newSetFromMap(new ConcurrentHashMap<>());
 

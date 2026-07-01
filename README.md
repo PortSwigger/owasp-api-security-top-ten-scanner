@@ -18,10 +18,11 @@ registered only under Professional.
 > findings **labelled against all ten OWASP API categories**, so a report
 > organised by the OWASP API Top 10 comes straight out of the tool. Where
 > a check overlaps native coverage, its issue detail carries a
-> **"Related Burp Scanner checks"** line linking to the native check —
-> which detects the same class at higher confidence — in the
-> [Burp Scanner vulnerabilities list](https://portswigger.net/burp/documentation/scanner/vulnerabilities-list).
-> Run the native scanner alongside this extension for the deepest results.
+> **"Related Burp Scanner checks"** line that **deep-links to the specific
+> native issue definition(s)** (e.g. [SQL injection](https://portswigger.net/kb/issues/00100200_sql-injection),
+> [Broken access control](https://portswigger.net/kb/issues/00100850_broken-access-control))
+> — the native scanner detects the same class at higher confidence. Run it
+> alongside this extension for the deepest results.
 
 ## Quick start
 
@@ -29,7 +30,7 @@ registered only under Professional.
 mvn clean package -DskipTests
 ```
 
-Produces `target/burp-api-scanner-2.3.1.jar`. Load via **Extensions →
+Produces `target/burp-api-scanner-2.3.2.jar`. Load via **Extensions →
 Installed → Add → Java**.
 
 Requires JDK 17+ (Montoya API requirement) and Maven 3.6+.
@@ -38,7 +39,7 @@ The banner in the extension's Output tab will look like:
 
 ```
 ====================================
-OWASP API Security Top 10 Scanner v2.3.1
+OWASP API Security Top 10 Scanner v2.3.2
 OWASP API Security Top 10 (2023) coverage
 Edition: Burp Suite Professional
 AI features: enabled

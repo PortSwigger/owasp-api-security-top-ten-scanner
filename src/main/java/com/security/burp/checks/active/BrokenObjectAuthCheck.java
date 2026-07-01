@@ -271,7 +271,5 @@ public final class BrokenObjectAuthCheck extends AbstractActiveCheck {
     /** Cross-reference to native Burp coverage (DAST-compatible; static). */
     private static final String RELATED_CHECKS =
             "<br><br><b>Related Burp Scanner checks:</b> for further detail refer to the native " +
-            "<b>Broken access control</b> check in the " +
-            "<a href=\"https://portswigger.net/burp/documentation/scanner/vulnerabilities-list\">" +
-            "Burp Scanner vulnerabilities list</a>.";
+            "<a href=\"https://portswigger.net/kb/issues/00100850_broken-access-control\">Broken access control</a> check.";
 }
