@@ -1,0 +1,13 @@
+Uuid: 4894a4ba29ec4303990196a6bbc5d67b
+ExtensionType: 1
+Name: OWASP API Security Top 10 Scanner
+RepoName: owasp-api-security-top-ten-scanner
+ScreenVersion: 2.3.2
+SerialVersion: 1
+MinPlatformVersion: 23
+ProOnly: True
+Author: Liam Tai-Hogan, PortSwigger
+ShortDescription: Scans APIs for all ten OWASP API Security Top 10 (2023) categories.
+EntryPoint: burp-api-scanner-2.3.2.jar
+BuildCommand: mvn clean package
+SupportedProducts: Pro
