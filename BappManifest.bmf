@@ -10,4 +10,4 @@ Author: Liam Tai-Hogan, PortSwigger
 ShortDescription: Scans APIs for all ten OWASP API Security Top 10 (2023) categories.
 EntryPoint: burp-api-scanner-2.3.2.jar
 BuildCommand: mvn clean package
-SupportedProducts: Pro
+SupportedProducts: Pro, DAST
