@@ -1,23 +1,35 @@
-<p>This extension provides coverage of all ten OWASP API Security Top 10 (2023) categories through active and passive scan checks. It reports findings labelled by OWASP API category so that scan output maps directly to the framework. Where checks overlap with native scanner coverage, issue details include references linking to the corresponding native issue definitions. The extension auto-detects the running edition and registers a UI tab only under the Professional edition.</p>
+<p>This extension provides coverage of all ten OWASP API Security Top 10 (2023) categories through active and passive
+  scan checks. It reports findings labelled by OWASP API category so that scan output maps directly to the framework.
+  Where checks overlap with native scanner coverage, issue details include references linking to the corresponding
+  native issue definitions.</p>
 
 <h2>Features</h2>
 <ul>
-  <li>Full OWASP API Security Top 10 (2023) coverage across 15 checks, combining active probing and passive traffic analysis.</li>
-  <li>Active version probing on versioned API paths (e.g. <code class=InlineCode>/vN/</code>) to detect deprecated API versions still reachable in production by probing <code class=InlineCode>/v(N-1)/</code>, <code class=InlineCode>/v(N-2)/</code>, and so on.</li>
-  <li>Content-compared broken object level authorization detection that fires only when a manipulated identifier returns a materially different response body, reducing noise from incidental 2xx responses.</li>
-  <li>HTTP Parameter Pollution detection that treats any response change from a duplicated parameter -- including a <code class=InlineCode>200 &rarr; 400</code> flip -- as an override primitive worth reporting.</li>
-  <li>Optional AI integration that activates two behaviours when enabled: passive false-positive triage on noise-prone checks, and contextual discovery of domain-specific mass-assignment field candidates beyond the hardcoded defaults.</li>
-  <li>API-specific coverage for categories with no native equivalent: Unrestricted Resource Consumption, Unrestricted Access to Sensitive Business Flows, Improper Inventory Management, and Unsafe Consumption of APIs.</li>
-  <li>Each overlapping issue includes a reference line linking to the corresponding native issue definition, making it straightforward to cross-reference findings with native scanner results.</li>
+  <li>All ten OWASP API Security Top 10 (2023) categories in a single extension, with every finding labelled by category
+    so scan output maps straight onto the framework for reporting.</li>
+  <li>Coverage of the four API-specific risks that native scanning does not address: unrestricted resource consumption,
+    unrestricted access to sensitive business flows, improper inventory management, and unsafe consumption of APIs.</li>
+  <li>Active discovery of deprecated API versions left reachable in production, by probing earlier versions of any <code
+      class="InlineCode">/vN/</code> path.</li>
+  <li>Detection tuned to keep noise down: broken object level authorization fires only when a manipulated identifier
+    returns a materially different object, and parameter pollution accounts for an endpoint's natural response variation
+    before reporting.</li>
+  <li>Optional AI assistance that filters false positives on noise-prone passive checks and suggests context-specific
+    mass-assignment fields to test.</li>
 </ul>
 
 <h2>Usage</h2>
 <ol>
-  <li>Build the extension with <code class=InlineCode>mvn clean package -DskipTests</code> to produce the JAR in the <code class=InlineCode>target/</code> directory.</li>
-  <li>Load the JAR via Extensions &rarr; Installed &rarr; Add &rarr; Java.</li>
-  <li>Confirm the extension loaded correctly by checking the Output tab for the startup banner, which shows the detected edition and whether AI features are active.</li>
-  <li>Browse or proxy API traffic as normal. Passive checks run automatically against all traffic passing through the proxy.</li>
-  <li>To trigger active checks, send API requests to the active scanner. All ten OWASP API categories will be probed, including version enumeration on any path matching the <code class=InlineCode>/vN/</code> pattern.</li>
-  <li>Review findings in the Issues panel. Each issue is labelled with its OWASP API category. For checks that overlap native coverage, follow the Related Burp Scanner checks link in the issue detail to compare with native findings.</li>
-  <li>If AI features are enabled, passive findings on noise-prone checks will be automatically triaged before reporting, and mass-assignment payloads will include domain-specific field suggestions derived from the observed request body.</li>
+  <li>Confirm the extension has loaded by checking its Output tab for the startup banner, which shows the detected
+    edition and whether AI features are active.</li>
+  <li>Browse or proxy API traffic as normal. Passive checks run automatically against traffic passing through the proxy,
+    and discovered endpoints appear in the extension's tab under Professional.</li>
+  <li>Send API requests to the Scanner to run the active checks across all ten OWASP API categories, including
+    version enumeration on any path matching the <code class="InlineCode">/vN/</code> pattern.</li>
+  <li>Review findings in the Issues view, where each is labelled with its OWASP API category. For checks that overlap
+    native coverage, follow the Related Burp Scanner checks reference in the issue detail to compare with native
+    findings.</li>
+  <li>If AI features are enabled, passive findings on noise-prone checks will be automatically triaged before reporting,
+    and mass-assignment payloads will include domain-specific field suggestions derived from the observed request body.
+  </li>
 </ol>

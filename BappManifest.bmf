@@ -6,7 +6,7 @@ ScreenVersion: 2.3.2
 SerialVersion: 2
 MinPlatformVersion: 23
 ProOnly: True
-Author: Liam Tai-Hogan, PortSwigger
+Author: Liam Tai-Hogan, PortSwigger, Rob Cornes, Twilio
 ShortDescription: Scans APIs for all ten OWASP API Security Top 10 (2023) categories.
 EntryPoint: burp-api-scanner-2.3.2.jar
 BuildCommand: mvn clean package
