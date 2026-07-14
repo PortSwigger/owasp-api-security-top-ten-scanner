@@ -12,24 +12,39 @@
   <li>Active discovery of deprecated API versions left reachable in production, by probing earlier versions of any <code
       class="InlineCode">/vN/</code> path.</li>
   <li>Detection tuned to keep noise down: broken object level authorization fires only when a manipulated identifier
-    returns a materially different object, and parameter pollution accounts for an endpoint's natural response variation
-    before reporting.</li>
+    returns a materially different object, and parameter pollution measures an endpoint's natural response variation
+    before reporting length-based differences.</li>
   <li>Optional AI assistance that filters false positives on noise-prone passive checks and suggests context-specific
     mass-assignment fields to test.</li>
 </ul>
 
 <h2>Usage</h2>
 <ol>
-  <li>Confirm the extension has loaded by checking its Output tab for the startup banner, which shows the detected
-    edition and whether AI features are active.</li>
-  <li>Browse or proxy API traffic as normal. Passive checks run automatically against traffic passing through the proxy,
-    and discovered endpoints appear in the extension's tab under Professional.</li>
-  <li>Send API requests to the Scanner to run the active checks across all ten OWASP API categories, including
-    version enumeration on any path matching the <code class="InlineCode">/vN/</code> pattern.</li>
+  <li>Confirm the extension has loaded:
+    <ul>
+      <li><strong>Burp Suite Professional:</strong> check the extension's Output tab for the startup banner, which shows
+        the detected edition and whether AI features are active.</li>
+      <li><strong>Burp Suite DAST:</strong> Open the scan's "Settings" tab and confirm the extension is listed under
+        "Extensions", then check the "Issues" tab for findings labelled <code class="InlineCode">APIx:2023</code> to
+        confirm it is running against the site.</li>
+    </ul>
+  </li>
+  <li>Browse or proxy API traffic as normal. Passive checks run against proxy traffic when live passive auditing is
+    enabled, and as part of any audit; discovered endpoints appear in the extension's tab under Professional.</li>
+  <li>Run an active audit against your API:
+    <ul>
+      <li><strong>Burp Suite Professional:</strong> start a scan from the "Dashboard &rarr; New scan" wizard (or
+        right-click a request and choose "Scan").</li>
+      <li><strong>Burp Suite DAST:</strong> launch a scan against your site.</li>
+    </ul>
+    The audit exercises the active checks - broken object and function-level authorization, injection, SSRF, mass
+    assignment, parameter pollution, TRACE, and version enumeration on any <code class="InlineCode">/vN/</code> path -
+    and runs the passive checks against the responses, so between them all ten OWASP API categories are covered.
+  </li>
   <li>Review findings in the Issues view, where each is labelled with its OWASP API category. For checks that overlap
     native coverage, follow the Related Burp Scanner checks reference in the issue detail to compare with native
     findings.</li>
-  <li>If AI features are enabled, passive findings on noise-prone checks will be automatically triaged before reporting,
-    and mass-assignment payloads will include domain-specific field suggestions derived from the observed request body.
-  </li>
+  <li>If AI features are enabled (Pro only), passive findings on noise-prone checks will be automatically triaged before
+    reporting, and mass-assignment payloads will include domain-specific field suggestions derived from the observed
+    request body.</li>
 </ol>
